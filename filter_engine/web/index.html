@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>过滤引擎管理系统</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
+    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; }
+        .app-container { min-height: 100vh; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 40px; }
+        .header h1 { font-size: 24px; font-weight: 600; }
+        .header p { opacity: 0.8; margin-top: 5px; }
+        .main-content { padding: 20px 40px; max-width: 1400px; margin: 0 auto; }
+        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .card-title { font-size: 18px; font-weight: 600; color: #303133; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+        .stat-card { background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%); border-radius: 8px; padding: 20px; text-align: center; }
+        .stat-value { font-size: 32px; font-weight: 700; color: #409eff; }
+        .stat-label { color: #909399; margin-top: 8px; }
+        .test-area { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .test-input textarea { width: 100%; height: 150px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 12px; font-size: 14px; resize: vertical; }
+        .test-result { background: #f5f7fa; border-radius: 8px; padding: 16px; min-height: 150px; }
+        .result-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; }
+        .result-spam { background: #fef0f0; color: #f56c6c; }
+        .result-clean { background: #f0f9eb; color: #67c23a; }
+        .result-suspicious { background: #fdf6ec; color: #e6a23c; }
+        .rule-type { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+        .type-keyword { background: #ecf5ff; color: #409eff; }
+        .type-regex { background: #fdf6ec; color: #e6a23c; }
+        .type-pattern { background: #f0f9eb; color: #67c23a; }
+        @media (max-width: 768px) {
+            .test-area { grid-template-columns: 1fr; }
+            .main-content { padding: 15px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app" class="app-container">
+        <div class="header">
+            <h1>🔍 数据过滤引擎</h1>
+            <p>规则过滤 + LLM语义分析 协同决策系统</p>
+        </div>
+        
+        <div class="main-content">
+            <!-- 统计卡片 -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">{{ stats.rules?.total || 0 }}</div>
+                    <div class="stat-label">规则总数</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #67c23a;">{{ stats.rules?.enabled || 0 }}</div>
+                    <div class="stat-label">已启用</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #e6a23c;">{{ stats.cache?.hit_rate ? (stats.cache.hit_rate * 100).toFixed(1) + '%' : 'N/A' }}</div>
+                    <div class="stat-label">缓存命中率</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" style="color: #909399;">{{ stats.llm_available ? '✓' : '✗' }}</div>
+                    <div class="stat-label">LLM状态</div>
+                </div>
+            </div>
+            
+            <!-- 快速测试 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">⚡ 快速测试</span>
+                </div>
+                <div class="test-area">
+                    <div class="test-input">
+                        <textarea v-model="testText" placeholder="输入待检测的文本内容..."></textarea>
+                        <div style="margin-top: 12px;">
+                            <el-button type="primary" @click="testFilter(false)" :loading="testing">规则过滤</el-button>
+                            <el-button type="success" @click="testFilter(true)" :loading="testing">规则 + LLM</el-button>
+                        </div>
+                    </div>
+                    <div class="test-result">
+                        <template v-if="testResult">
+                            <div style="margin-bottom: 12px;">
+                                <span class="result-badge" :class="getResultClass(testResult)">
+                                    {{ testResult.is_spam ? '⚠️ 垃圾信息' : '✅ 正常内容' }}
+                                </span>
+                                <span style="margin-left: 12px; color: #909399;">
+                                    置信度: {{ (testResult.confidence * 100).toFixed(1) }}%
+                                </span>
+                            </div>
+                            <div v-if="testResult.matched_rules?.length" style="margin-bottom: 8px;">
+                                <strong>命中规则:</strong> {{ testResult.matched_rules.join(', ') }}
+                            </div>
+                            <div v-if="testResult.category" style="margin-bottom: 8px;">
+                                <strong>分类:</strong> {{ testResult.category }}
+                            </div>
+                            <div v-if="testResult.llm_reason" style="margin-bottom: 8px;">
+                                <strong>LLM理由:</strong> {{ testResult.llm_reason }}
+                            </div>
+                            <div style="color: #909399; font-size: 12px;">
+                                来源: {{ testResult.source }}
+                            </div>
+                        </template>
+                        <div v-else style="color: #909399; text-align: center; padding-top: 50px;">
+                            输入文本后点击测试按钮
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 规则管理 -->
+            <div class="card">
+                <div class="card-header">
+                    <span class="card-title">📋 规则管理</span>
+                    <div>
+                        <el-button type="primary" size="small" @click="showAddDialog">添加规则</el-button>
+                        <el-button size="small" @click="loadRules">刷新</el-button>
+                        <el-button size="small" @click="exportRules">导出</el-button>
+                    </div>
+                </div>
+                
+                <el-table :data="rules" style="width: 100%" v-loading="loadingRules">
+                    <el-table-column prop="id" label="ID" width="60" />
+                    <el-table-column prop="name" label="规则名称" min-width="150" />
+                    <el-table-column prop="type" label="类型" width="100">
+                        <template #default="{ row }">
+                            <span class="rule-type" :class="'type-' + row.type">{{ row.type }}</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="category" label="分类" width="100">
+                        <template #default="{ row }">
+                            <el-tag size="small" v-if="row.category">{{ row.category }}</el-tag>
+                            <span v-else style="color: #c0c4cc;">-</span>
+                        </template>
+                    </el-table-column>
+                    <el-table-column prop="priority" label="优先级" width="80" />
+                    <el-table-column prop="enabled" label="状态" width="80">
+                        <template #default="{ row }">
+                            <el-switch v-model="row.enabled" @change="toggleRule(row)" />
+                        </template>
+                    </el-table-column>
+                    <el-table-column label="操作" width="200">
+                        <template #default="{ row }">
+                            <el-button size="small" @click="editRule(row)">编辑</el-button>
+                            <el-button size="small" @click="showVersions(row)">版本</el-button>
+                            <el-button size="small" type="danger" @click="deleteRule(row)">删除</el-button>
+                        </template>
+                    </el-table-column>
+                </el-table>
+            </div>
+        </div>
+        
+        <!-- 添加/编辑规则对话框 -->
+        <el-dialog v-model="ruleDialog.visible" :title="ruleDialog.isEdit ? '编辑规则' : '添加规则'" width="600px">
+            <el-form :model="ruleDialog.form" label-width="80px">
+                <el-form-item label="名称">
+                    <el-input v-model="ruleDialog.form.name" placeholder="规则名称" />
+                </el-form-item>
+                <el-form-item label="类型">
+                    <el-select v-model="ruleDialog.form.type" style="width: 100%;">
+                        <el-option label="关键词" value="keyword" />
+                        <el-option label="正则表达式" value="regex" />
+                        <el-option label="模式规则" value="pattern" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="内容">
+                    <el-input v-model="ruleDialog.form.content" type="textarea" :rows="4" 
+                        :placeholder="getContentPlaceholder(ruleDialog.form.type)" />
+                </el-form-item>
+                <el-form-item label="分类">
+                    <el-select v-model="ruleDialog.form.category" style="width: 100%;" clearable>
+                        <el-option label="垃圾信息" value="spam" />
+                        <el-option label="广告" value="ad" />
+                        <el-option label="敏感内容" value="sensitive" />
+                        <el-option label="不当言论" value="profanity" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="优先级">
+                    <el-input-number v-model="ruleDialog.form.priority" :min="0" :max="100" />
+                </el-form-item>
+                <el-form-item label="启用">
+                    <el-switch v-model="ruleDialog.form.enabled" />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="ruleDialog.visible = false">取消</el-button>
+                <el-button type="primary" @click="saveRule">保存</el-button>
+            </template>
+        </el-dialog>
+        
+        <!-- 版本历史对话框 -->
+        <el-dialog v-model="versionDialog.visible" title="版本历史" width="600px">
+            <el-table :data="versionDialog.versions" style="width: 100%">
+                <el-table-column prop="version" label="版本" width="80" />
+                <el-table-column prop="created_at" label="创建时间" width="180" />
+                <el-table-column prop="content" label="内容" show-overflow-tooltip />
+                <el-table-column label="操作" width="100">
+                    <template #default="{ row }">
+                        <el-button size="small" @click="rollbackVersion(row)">回滚</el-button>
+                    </template>
+                </el-table-column>
+            </el-table>
+        </el-dialog>
+    </div>
+    
+    <script>
+        const { createApp, ref, reactive, onMounted } = Vue;
+        
+        createApp({
+            setup() {
+                const rules = ref([]);
+                const stats = ref({});
+                const loadingRules = ref(false);
+                const testing = ref(false);
+                const testText = ref('');
+                const testResult = ref(null);
+                
+                const ruleDialog = reactive({
+                    visible: false,
+                    isEdit: false,
+                    editId: null,
+                    form: {
+                        name: '',
+                        type: 'keyword',
+                        content: '',
+                        category: null,
+                        priority: 0,
+                        enabled: true,
+                    }
+                });
+                
+                const versionDialog = reactive({
+                    visible: false,
+                    ruleId: null,
+                    versions: []
+                });
+                
+                const loadRules = async () => {
+                    loadingRules.value = true;
+                    try {
+                        const res = await fetch('/api/rules');
+                        rules.value = await res.json();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('加载规则失败');
+                    }
+                    loadingRules.value = false;
+                };
+                
+                const loadStats = async () => {
+                    try {
+                        const [sysRes, rulesRes] = await Promise.all([
+                            fetch('/api/stats'),
+                            fetch('/api/rules/stats')
+                        ]);
+                        const sysStats = await sysRes.json();
+                        const rulesStats = await rulesRes.json();
+                        stats.value = { ...sysStats, rules: rulesStats };
+                    } catch (e) {
+                        console.error('加载统计失败', e);
+                    }
+                };
+                
+                const testFilter = async (useLlm) => {
+                    if (!testText.value.trim()) {
+                        ElementPlus.ElMessage.warning('请输入文本');
+                        return;
+                    }
+                    testing.value = true;
+                    try {
+                        const res = await fetch('/api/filter', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ text: testText.value, use_llm: useLlm })
+                        });
+                        testResult.value = await res.json();
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('测试失败');
+                    }
+                    testing.value = false;
+                };
+                
+                const getResultClass = (result) => {
+                    if (result.is_spam && result.confidence >= 0.7) return 'result-spam';
+                    if (result.is_spam) return 'result-suspicious';
+                    return 'result-clean';
+                };
+                
+                const showAddDialog = () => {
+                    ruleDialog.isEdit = false;
+                    ruleDialog.editId = null;
+                    ruleDialog.form = {
+                        name: '', type: 'keyword', content: '',
+                        category: null, priority: 0, enabled: true
+                    };
+                    ruleDialog.visible = true;
+                };
+                
+                const editRule = (rule) => {
+                    ruleDialog.isEdit = true;
+                    ruleDialog.editId = rule.id;
+                    ruleDialog.form = { ...rule };
+                    ruleDialog.visible = true;
+                };
+                
+                const saveRule = async () => {
+                    try {
+                        const url = ruleDialog.isEdit ? `/api/rules/${ruleDialog.editId}` : '/api/rules';
+                        const method = ruleDialog.isEdit ? 'PUT' : 'POST';
+                        await fetch(url, {
+                            method,
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(ruleDialog.form)
+                        });
+                        ruleDialog.visible = false;
+                        loadRules();
+                        ElementPlus.ElMessage.success('保存成功');
+                    } catch (e) {
+                        ElementPlus.ElMessage.error('保存失败');
+                    }
+                };
+                
+                const toggleRule = async (rule) => {
+                    await fetch(`/api/rules/${rule.id}/toggle`, { method: 'PUT' });
+                };
+                
+                const deleteRule = async (rule) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm('确定删除此规则？', '警告', { type: 'warning' });
+                        await fetch(`/api/rules/${rule.id}`, { method: 'DELETE' });
+                        loadRules();
+                        ElementPlus.ElMessage.success('删除成功');
+                    } catch (e) {}
+                };
+                
+                const showVersions = async (rule) => {
+                    versionDialog.ruleId = rule.id;
+                    const res = await fetch(`/api/rules/${rule.id}/versions`);
+                    versionDialog.versions = await res.json();
+                    versionDialog.visible = true;
+                };
+                
+                const rollbackVersion = async (version) => {
+                    await fetch(`/api/rules/${versionDialog.ruleId}/rollback/${version.version}`, { method: 'POST' });
+                    versionDialog.visible = false;
+                    loadRules();
+                    ElementPlus.ElMessage.success('回滚成功');
+                };
+                
+                const exportRules = async () => {
+                    const res = await fetch('/api/rules/export');
+                    const data = await res.json();
+                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'rules_export.json';
+                    a.click();
+                };
+                
+                const getContentPlaceholder = (type) => {
+                    if (type === 'keyword') return '["关键词1", "关键词2", ...]';
+                    if (type === 'regex') return '["正则表达式1", "正则表达式2", ...]';
+                    return '{"mode": "any", "keywords": [...], "regex": [...]}';
+                };
+                
+                onMounted(() => {
+                    loadRules();
+                    loadStats();
+                });
+                
+                return {
+                    rules, stats, loadingRules, testing, testText, testResult,
+                    ruleDialog, versionDialog,
+                    loadRules, testFilter, getResultClass,
+                    showAddDialog, editRule, saveRule, toggleRule, deleteRule,
+                    showVersions, rollbackVersion, exportRules, getContentPlaceholder
+                };
+            }
+        }).use(ElementPlus).mount('#app');
+    </script>
+</body>
+</html>

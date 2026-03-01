@@ -58,6 +58,12 @@ async def list_rules(
     return rule_manager.list(enabled_only=enabled_only, category=category)
 
 
+@app.get("/api/rules/stats", tags=["规则管理"])
+async def get_rules_stats():
+    """获取规则统计"""
+    return rule_manager.stats()
+
+
 @app.get("/api/rules/{rule_id}", response_model=Rule, tags=["规则管理"])
 async def get_rule(rule_id: int):
     """获取单条规则"""
@@ -134,9 +140,25 @@ async def export_rules():
 @app.post("/api/rules/import", tags=["规则管理"])
 async def import_rules(data: ImportRulesRequest):
     """批量导入规则"""
-    count = rule_manager.import_rules(data.rules)
+    result = rule_manager.import_rules(data.rules, overwrite=True)
     pipeline.reload_rules()
-    return {"message": f"成功导入 {count} 条规则", "count": count}
+    return {"message": "导入完成", **result}
+
+
+@app.post("/api/rules/test", tags=["规则管理"])
+async def test_rule(rule_id: int, text: str):
+    """测试单条规则"""
+    from .rules import RuleCreate
+    rule = rule_manager.get(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="规则不存在")
+    
+    result = pipeline.rule_engine.test_rule(rule, text)
+    return {
+        "is_matched": result.is_matched,
+        "confidence": result.confidence,
+        "matched_rules": [m.model_dump() for m in result.matched_rules],
+    }
 
 
 # ==================== 过滤API ====================
@@ -157,6 +179,26 @@ async def filter_batch(request: BatchFilterRequest):
         use_llm=request.use_llm,
     )
     return results
+
+
+@app.get("/api/stats", tags=["系统"])
+async def get_system_stats():
+    """获取系统统计"""
+    return pipeline.get_stats()
+
+
+@app.post("/api/cache/clear", tags=["系统"])
+async def clear_cache():
+    """清空缓存"""
+    pipeline.clear_cache()
+    return {"message": "缓存已清空"}
+
+
+@app.post("/api/rules/reload", tags=["系统"])
+async def reload_rules():
+    """重新加载规则"""
+    pipeline.reload_rules()
+    return {"message": "规则已重新加载"}
 
 
 # ==================== 前端页面 ====================

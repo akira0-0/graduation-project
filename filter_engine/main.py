@@ -45,10 +45,11 @@ def cmd_rules(args):
             print(f"{status} [{r.id}] {r.name} ({r.type}) - {r.category}")
     
     elif args.action == "add":
+        content = json.dumps(args.content.split(",")) if args.content else "[]"
         rule = RuleCreate(
             name=args.name,
             type=args.type,
-            content=args.content.split(","),
+            content=content,
             category=args.category,
         )
         created = manager.create(rule)
@@ -85,7 +86,7 @@ def cmd_serve(args):
     """启动API服务"""
     import uvicorn
     uvicorn.run(
-        "filter_engine_v2.api:app",
+        "filter_engine.api:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
