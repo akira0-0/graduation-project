@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment (使用父项目的环境，不需要单独的虚拟环境)
+# .venv/
+# venv/
+# ENV/
+
+# UV
+# uv.lock
+# pyproject.toml (使用父项目的配置)
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Data
+data/*.json
+
+# Config (contains sensitive cookie)
+config.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
