@@ -84,6 +84,22 @@ class RuleManager:
                     CREATE INDEX IF NOT EXISTS idx_rules_enabled ON rules(enabled);
                     CREATE INDEX IF NOT EXISTS idx_rules_category ON rules(category);
                 """)
+            
+            # 数据库迁移：确保 description 列存在
+            self._migrate_db(conn)
+    
+    def _migrate_db(self, conn):
+        """数据库迁移：添加缺失的列"""
+        # 获取当前表结构
+        cursor = conn.execute("PRAGMA table_info(rules)")
+        columns = {row[1] for row in cursor.fetchall()}
+        
+        # 添加缺失的 description 列
+        if 'description' not in columns:
+            try:
+                conn.execute("ALTER TABLE rules ADD COLUMN description TEXT")
+            except sqlite3.OperationalError:
+                pass  # 列已存在
     
     def _row_to_rule(self, row) -> Rule:
         """将数据库行转换为Rule对象"""

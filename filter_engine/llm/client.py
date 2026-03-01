@@ -123,8 +123,8 @@ class OpenAIClient(BaseLLMClient):
         )
 
 
-class QwenClient(OpenAIClient):
-    """通义千问客户端"""
+class QwenClient(BaseLLMClient):
+    """通义千问客户端 - 使用兼容模式"""
     
     def __init__(
         self,
@@ -132,12 +132,87 @@ class QwenClient(OpenAIClient):
         model: str = "qwen-turbo",
         timeout: int = 30,
     ):
-        super().__init__(
-            api_key=api_key,
-            api_base="https://dashscope.aliyuncs.com/compatible-mode/v1",
-            model=model,
-            timeout=timeout,
-        )
+        self.api_key = api_key or settings.LLM_API_KEY
+        self.api_base = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+        self.model = model
+        self.timeout = timeout
+        
+        # 千问使用 Authorization: Bearer YOUR_API_KEY
+        self.headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {self.api_key}",
+        }
+    
+    async def chat(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.1,
+        max_tokens: int = 500,
+    ) -> LLMResponse:
+        """异步发送聊天请求"""
+        url = f"{self.api_base}/chat/completions"
+        
+        # 千问 API 参数（兼容 OpenAI 格式）
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        
+        # 只在需要时添加 max_tokens（千问可能对此敏感）
+        if max_tokens and max_tokens < 6000:  # 千问的合理范围
+            payload["max_tokens"] = max_tokens
+        
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(url, json=payload, headers=self.headers)
+                response.raise_for_status()
+                data = response.json()
+            
+            return LLMResponse(
+                content=data["choices"][0]["message"]["content"],
+                model=data.get("model", self.model),
+                usage=data.get("usage", {}),
+                raw_response=data,
+            )
+        except httpx.HTTPStatusError as e:
+            # 提供更详细的错误信息
+            error_detail = e.response.text
+            raise Exception(f"千问API调用失败 ({e.response.status_code}): {error_detail}")
+    
+    def chat_sync(
+        self,
+        messages: List[Dict[str, str]],
+        temperature: float = 0.1,
+        max_tokens: int = 500,
+    ) -> LLMResponse:
+        """同步发送聊天请求"""
+        url = f"{self.api_base}/chat/completions"
+        
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        
+        if max_tokens and max_tokens < 6000:
+            payload["max_tokens"] = max_tokens
+        
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(url, json=payload, headers=self.headers)
+                response.raise_for_status()
+                data = response.json()
+            
+            return LLMResponse(
+                content=data["choices"][0]["message"]["content"],
+                model=data.get("model", self.model),
+                usage=data.get("usage", {}),
+                raw_response=data,
+            )
+        except httpx.HTTPStatusError as e:
+            error_detail = e.response.text
+            raise Exception(f"千问API调用失败 ({e.response.status_code}): {error_detail}")
 
 
 class GLMClient(OpenAIClient):

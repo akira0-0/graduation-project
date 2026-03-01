@@ -87,7 +87,18 @@ async def run_daily_task(keywords: Optional[list] = None, parallel_all: bool = F
         logger.info("Step 3: 数据格式转换")
         logger.info("=" * 60)
         
-        run_conversion()
+        # 记录任务开始的日期
+        from datetime import timedelta
+        task_start_date = task_logger.start_time.strftime('%Y-%m-%d')
+        current_date = datetime.now().strftime('%Y-%m-%d')
+        
+        # 转换任务开始日期的数据
+        run_conversion(task_start_date)
+        
+        # 如果跨天了，也转换当前日期的数据
+        if current_date != task_start_date:
+            logger.info(f"检测到跨天：{task_start_date} -> {current_date}，同时转换两天的数据")
+            run_conversion(current_date)
         
         # Step 4: 数据入库
         logger.info("")
@@ -95,7 +106,13 @@ async def run_daily_task(keywords: Optional[list] = None, parallel_all: bool = F
         logger.info("Step 4: 数据入库")
         logger.info("=" * 60)
         
-        run_import()
+        # 导入任务开始日期的数据
+        run_import(task_start_date)
+        
+        # 如果跨天了，也导入当前日期的数据
+        if current_date != task_start_date:
+            logger.info(f"同时导入 {current_date} 的数据")
+            run_import(current_date)
         
     except Exception as e:
         logger.error(f"任务执行异常: {e}")

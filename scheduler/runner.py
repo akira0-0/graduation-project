@@ -218,6 +218,9 @@ class CrawlerRunner:
         task_logger.start()
         results = []
         
+        # 记录爬虫运行前的数据量
+        initial_posts, initial_comments = self._count_xhs_data_today()
+        
         for keyword in self.keywords:
             result = await self._run_single_xhs(keyword, task_logger)
             results.append(result)
@@ -225,6 +228,15 @@ class CrawlerRunner:
             # 关键词之间间隔，避免被封
             if keyword != self.keywords[-1]:
                 await asyncio.sleep(5)
+        
+        # 计算实际新增的数据量
+        final_posts, final_comments = self._count_xhs_data_today()
+        actual_posts = final_posts - initial_posts
+        actual_comments = final_comments - initial_comments
+        
+        # 更新 task_logger 的统计（覆盖累加的错误值）
+        task_logger.stats['posts'] = actual_posts
+        task_logger.stats['comments'] = actual_comments
         
         task_logger.end()
         return results
@@ -466,14 +478,21 @@ class CrawlerRunner:
         return self._count_unified_data('weibo')
     
     def _count_xhs_data(self, keyword: str) -> Tuple[int, int]:
-        """统计小红书数据量（原始格式）"""
+        """统计小红书数据量（只统计今天的数据）- 用于单次爬取后显示"""
+        return self._count_xhs_data_today()
+    
+    def _count_xhs_data_today(self) -> Tuple[int, int]:
+        """统计今天的小红书数据量"""
         data_dir = os.path.join(self.project_root, 'data', 'xhs', 'json')
         posts = 0
         comments = 0
         
         try:
+            today = datetime.now().strftime('%Y-%m-%d')
+            
             for filename in os.listdir(data_dir):
-                if filename.endswith('.json'):
+                # 只统计今天的数据文件
+                if filename.endswith('.json') and today in filename:
                     filepath = os.path.join(data_dir, filename)
                     with open(filepath, 'r', encoding='utf-8') as f:
                         data = json.load(f)

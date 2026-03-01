@@ -18,9 +18,12 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
-def convert_xhs_data() -> tuple:
+def convert_xhs_data(target_date: str = None) -> tuple:
     """
     转换小红书数据为统一格式
+    
+    Args:
+        target_date: 目标日期，格式 YYYY-MM-DD，默认为今天
     
     Returns:
         (转换的帖子数, 转换的评论数)
@@ -42,15 +45,19 @@ def convert_xhs_data() -> tuple:
         posts_count = 0
         comments_count = 0
         
-        today = datetime.now().strftime('%Y-%m-%d')
+        # 使用指定日期或今天
+        if target_date is None:
+            target_date = datetime.now().strftime('%Y-%m-%d')
         
-        # 遍历源目录中的文件，只处理今天的数据
+        logger.info(f"转换小红书数据，日期: {target_date}")
+        
+        # 遍历源目录中的文件，只处理指定日期的数据
         for filename in os.listdir(source_dir):
             if not filename.endswith('.json'):
                 continue
             
-            # 只处理今天的数据文件
-            if today not in filename:
+            # 只处理指定日期的数据文件
+            if target_date not in filename:
                 continue
             
             filepath = os.path.join(source_dir, filename)
@@ -69,7 +76,7 @@ def convert_xhs_data() -> tuple:
                     comments_count += len(converted)
                     
                     # 保存到统一格式目录
-                    output_file = os.path.join(target_dir, f'search_comments_{today}.json')
+                    output_file = os.path.join(target_dir, f'search_comments_{target_date}.json')
                     _merge_and_save(output_file, converted)
                     logger.info(f"转换小红书评论: {len(converted)} 条")
                 elif 'contents' in filename.lower():
@@ -78,7 +85,7 @@ def convert_xhs_data() -> tuple:
                     posts_count += len(converted)
                     
                     # 保存到统一格式目录 (统一命名为 search_posts_*)
-                    output_file = os.path.join(target_dir, f'search_posts_{today}.json')
+                    output_file = os.path.join(target_dir, f'search_posts_{target_date}.json')
                     _merge_and_save(output_file, converted)
                     logger.info(f"转换小红书帖子: {len(converted)} 条")
                     
@@ -129,19 +136,24 @@ def _merge_and_save(filepath: str, new_data: List[Dict]):
         logger.debug(f"保存数据到 {filepath}: 新增 {len(new_items)} 条")
 
 
-def run_conversion():
+def run_conversion(target_date: str = None):
     """
     运行所有数据转换
+    
+    Args:
+        target_date: 目标日期，格式 YYYY-MM-DD，默认为今天
     """
     logger.info("=" * 60)
     logger.info("开始数据格式转换")
+    if target_date:
+        logger.info(f"目标日期: {target_date}")
     logger.info("=" * 60)
     
     total_posts = 0
     total_comments = 0
     
     # 转换小红书数据
-    posts, comments = convert_xhs_data()
+    posts, comments = convert_xhs_data(target_date)
     total_posts += posts
     total_comments += comments
     
@@ -157,4 +169,13 @@ def run_conversion():
 
 
 if __name__ == "__main__":
-    run_conversion()
+    import sys
+    
+    # 支持命令行参数指定日期
+    # 用法: python -m scheduler.converter 2026-03-01
+    target_date = sys.argv[1] if len(sys.argv) > 1 else None
+    
+    if target_date:
+        print(f"📅 转换指定日期数据: {target_date}")
+    
+    run_conversion(target_date)

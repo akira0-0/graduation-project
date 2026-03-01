@@ -18,9 +18,9 @@ ENABLE_XHS = True           # 启用小红书爬虫
 ENABLE_WEB = True           # 启用网易新闻爬虫
 
 # 爬取数量限制
-WEIBO_MAX_PAGES = 3         # 微博每个关键词爬取页数
-XHS_MAX_NOTES = 20          # 小红书每个关键词爬取笔记数
-WEB_MAX_ARTICLES = 5        # 网易每个关键词爬取文章数
+WEIBO_MAX_PAGES = 5         # 微博每个关键词爬取页数
+XHS_MAX_NOTES = 50          # 小红书每个关键词爬取笔记数
+WEB_MAX_ARTICLES = 25        # 网易每个关键词爬取文章数
 
 # 超时设置（秒）
 CRAWLER_TIMEOUT = 600       # 单个关键词爬取超时

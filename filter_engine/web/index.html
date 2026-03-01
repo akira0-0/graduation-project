@@ -180,6 +180,9 @@
                 <el-form-item label="优先级">
                     <el-input-number v-model="ruleDialog.form.priority" :min="0" :max="100" />
                 </el-form-item>
+                <el-form-item label="描述">
+                    <el-input v-model="ruleDialog.form.description" type="textarea" :rows="2" placeholder="规则描述（可选）" />
+                </el-form-item>
                 <el-form-item label="启用">
                     <el-switch v-model="ruleDialog.form.enabled" />
                 </el-form-item>
@@ -226,8 +229,9 @@
                         type: 'keyword',
                         content: '',
                         category: null,
-                        priority: 0,
+                        priority: 50,
                         enabled: true,
+                        description: ''
                     }
                 });
                 
@@ -291,8 +295,13 @@
                     ruleDialog.isEdit = false;
                     ruleDialog.editId = null;
                     ruleDialog.form = {
-                        name: '', type: 'keyword', content: '',
-                        category: null, priority: 0, enabled: true
+                        name: '', 
+                        type: 'keyword', 
+                        content: '',
+                        category: null, 
+                        priority: 50, 
+                        enabled: true,
+                        description: ''
                     };
                     ruleDialog.visible = true;
                 };
@@ -308,16 +317,24 @@
                     try {
                         const url = ruleDialog.isEdit ? `/api/rules/${ruleDialog.editId}` : '/api/rules';
                         const method = ruleDialog.isEdit ? 'PUT' : 'POST';
-                        await fetch(url, {
+                        const response = await fetch(url, {
                             method,
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify(ruleDialog.form)
                         });
+                        
+                        if (!response.ok) {
+                            const errorData = await response.json().catch(() => ({}));
+                            const errorMsg = errorData.detail || `HTTP ${response.status}`;
+                            throw new Error(errorMsg);
+                        }
+                        
                         ruleDialog.visible = false;
                         loadRules();
                         ElementPlus.ElMessage.success('保存成功');
                     } catch (e) {
-                        ElementPlus.ElMessage.error('保存失败');
+                        console.error('保存规则失败:', e);
+                        ElementPlus.ElMessage.error('保存失败: ' + e.message);
                     }
                 };
                 

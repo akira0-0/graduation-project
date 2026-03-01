@@ -87,11 +87,12 @@ def parse_datetime(time_str):
     return None
 
 
-def import_posts_with_sdk(supabase: Client, file_path: str):
+def import_posts_with_sdk(supabase: Client, file_path: str, verbose: bool = True):
     """导入帖子数据（统一格式）"""
     
     if not os.path.exists(file_path):
-        print(f"❌ 文件不存在: {file_path}")
+        if verbose:
+            print(f"❌ 文件不存在: {file_path}")
         return 0
     
     try:
@@ -194,11 +195,12 @@ def import_posts_with_sdk(supabase: Client, file_path: str):
     print(f"✅ 帖子导入完成: {success_count}/{len(unique_posts)} 条")
     return success_count
 
-def import_comments_with_sdk(supabase: Client, file_path: str):
+def import_comments_with_sdk(supabase: Client, file_path: str, verbose: bool = True):
     """导入评论数据（统一格式）"""
     
     if not os.path.exists(file_path):
-        print(f"❌ 文件不存在: {file_path}")
+        if verbose:
+            print(f"❌ 文件不存在: {file_path}")
         return 0
     
     try:
@@ -327,6 +329,34 @@ def main():
         print("\n💡 请先执行 database/schema_supabase.sql 创建表结构")
         return
     
+    # 选择日期
+    print("\n请选择导入日期:")
+    print("1. 今天 (2026-03-02)")
+    print("2. 昨天 (2026-03-01)")
+    print("3. 自定义日期")
+    
+    date_choice = input("\n请输入选项 (1-3): ").strip()
+    
+    from datetime import datetime, timedelta
+    
+    if date_choice == '1':
+        target_date = datetime.now().strftime('%Y-%m-%d')
+    elif date_choice == '2':
+        target_date = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    elif date_choice == '3':
+        target_date = input("请输入日期 (格式: 2026-03-01): ").strip()
+        # 验证日期格式
+        try:
+            datetime.strptime(target_date, '%Y-%m-%d')
+        except ValueError:
+            print("❌ 日期格式错误，请使用 YYYY-MM-DD 格式")
+            return
+    else:
+        print("❌ 无效选项")
+        return
+    
+    print(f"\n📅 目标日期: {target_date}")
+    
     # 选择平台
     print("\n请选择要导入的平台数据:")
     print("1. 微博 (data/unified/weibo/)")
@@ -361,19 +391,33 @@ def main():
             continue
         
         print(f"\n{'='*60}")
-        print(f"📁 处理 {platform.upper()} 数据")
+        print(f"📁 处理 {platform.upper()} 数据 ({target_date})")
         print(f"{'='*60}")
         
-        # 查找帖子文件（支持 posts 和 contents 两种命名）
+        # 查找指定日期的帖子文件
         all_files = os.listdir(data_dir)
-        post_files = [f for f in all_files if ('posts' in f or 'contents' in f) and f.endswith('.json')]
+        post_files = [f for f in all_files 
+                      if target_date in f 
+                      and ('posts' in f or 'contents' in f) 
+                      and f.endswith('.json')]
+        
+        if not post_files:
+            print(f"⚠️ 未找到 {target_date} 的帖子数据")
+        
         for file in post_files:
             file_path = os.path.join(data_dir, file)
             print(f"\n📝 导入帖子: {file}")
             total_posts += import_posts_with_sdk(supabase, file_path)
         
-        # 查找评论文件
-        comment_files = [f for f in os.listdir(data_dir) if 'comments' in f and f.endswith('.json')]
+        # 查找指定日期的评论文件
+        comment_files = [f for f in all_files 
+                        if target_date in f 
+                        and 'comments' in f 
+                        and f.endswith('.json')]
+        
+        if not comment_files:
+            print(f"⚠️ 未找到 {target_date} 的评论数据")
+        
         for file in comment_files:
             file_path = os.path.join(data_dir, file)
             print(f"\n💬 导入评论: {file}")

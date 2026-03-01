@@ -5,6 +5,7 @@
 支持输出统一数据格式到 data/unified/wangyi/
 """
 import sys
+import io
 import json
 import time
 import datetime
@@ -12,17 +13,24 @@ import hashlib
 import os
 import platform
 
+# 修复 Windows 终端编码问题
+if sys.platform == 'win32':
+    if sys.stdout and hasattr(sys.stdout, 'buffer'):
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    if sys.stderr and hasattr(sys.stderr, 'buffer'):
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 # 尝试导入库
 try:
     from DrissionPage import WebPage, ChromiumOptions
 except ImportError as e:
-    print(f"❌ 缺少必要库: {e}")
-    print("请运行: uv pip install DrissionPage")
-    sys.exit()
+    print(f"[ERROR] 缺少必要库: {e}")
+    print("请运行: uv add DrissionPage")
+    sys.exit(1)
 
-# ==================== ⚙️ 配置中心 ====================
-KEYWORDS = ['AI眼镜能否取代手机', '明家涉案100余亿14名中国人死亡', '旅游', '总书记激励体育健儿超越自我', '那个创办快乐大本营的人走了', '人工智能', '全国气温回升大趋势成定局'] 
-MAX_ARTICLES = 2  # 每个关键词爬取文章数
+# ==================== 配置中心 ====================
+KEYWORDS = ["伊朗", "王楚钦", "新春", "小米", "浙江", "赵今麦", "医生", "陈妍希", "孙颖莎", "迪拜", "迪丽", "WTT", "以色列", "陈思罕", "油轮"] 
+MAX_ARTICLES = 5  # 每个关键词爬取文章数
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_ROOT = os.path.dirname(SCRIPT_DIR)
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data', 'unified', 'wangyi')

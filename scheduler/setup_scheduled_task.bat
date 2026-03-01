@@ -19,15 +19,15 @@ schtasks /delete /tn "DailyCrawlerTask" /f 2>nul
 REM 创建每日 10:00 执行的定时任务（早上）
 schtasks /create /tn "%TASK_NAME_AM%" /tr "%SCRIPT_PATH%" /sc daily /st 10:00 /f
 
-REM 创建每日 22:00 执行的定时任务（晚上）
-schtasks /create /tn "%TASK_NAME_PM%" /tr "%SCRIPT_PATH%" /sc daily /st 22:00 /f
+REM 创建每日 22:15 执行的定时任务（晚上）
+schtasks /create /tn "%TASK_NAME_PM%" /tr "%SCRIPT_PATH%" /sc daily /st 22:15 /f
 
 if %errorlevel% equ 0 (
     echo.
     echo [OK] 定时任务创建成功！
     echo.
     echo 任务1: %TASK_NAME_AM% - 每天 10:00
-    echo 任务2: %TASK_NAME_PM% - 每天 22:00
+    echo 任务2: %TASK_NAME_PM% - 每天 22:15
     echo 脚本路径: %SCRIPT_PATH%
     echo.
     echo 管理命令:

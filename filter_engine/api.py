@@ -76,6 +76,16 @@ async def get_rule(rule_id: int):
 @app.post("/api/rules", response_model=Rule, tags=["规则管理"])
 async def create_rule(data: RuleCreate):
     """创建规则"""
+    # 验证 content 字段是有效 JSON
+    try:
+        parsed = json.loads(data.content)
+        if data.type.value == 'keyword' and not isinstance(parsed, list):
+            raise HTTPException(status_code=400, detail="关键词规则的 content 必须是 JSON 数组格式，如 [\"关键词1\", \"关键词2\"]")
+        if data.type.value == 'regex' and not isinstance(parsed, list):
+            raise HTTPException(status_code=400, detail="正则规则的 content 必须是 JSON 数组格式，如 [\"正则1\", \"正则2\"]")
+    except json.JSONDecodeError as e:
+        raise HTTPException(status_code=400, detail=f"content 必须是有效的 JSON 格式: {e}")
+    
     try:
         rule = rule_manager.create(data)
         pipeline.reload_rules()

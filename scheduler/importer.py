@@ -18,9 +18,12 @@ from .logger import get_logger
 logger = get_logger(__name__)
 
 
-def import_to_database() -> Tuple[int, int]:
+def import_to_database(target_date: str = None) -> Tuple[int, int]:
     """
     将统一格式数据导入到数据库
+    
+    Args:
+        target_date: 目标日期，格式 YYYY-MM-DD，默认为今天
     
     Returns:
         (导入的帖子数, 导入的评论数)
@@ -49,7 +52,11 @@ def import_to_database() -> Tuple[int, int]:
         total_posts = 0
         total_comments = 0
         
-        today = datetime.now().strftime('%Y-%m-%d')
+        # 使用指定日期或今天
+        if target_date is None:
+            target_date = datetime.now().strftime('%Y-%m-%d')
+        
+        logger.info(f"导入日期: {target_date}")
         
         # 导入各平台数据
         platforms = ['weibo', 'xhs', 'wangyi']
@@ -62,18 +69,18 @@ def import_to_database() -> Tuple[int, int]:
                 continue
             
             # 导入帖子
-            posts_file = os.path.join(platform_dir, f'search_posts_{today}.json')
+            posts_file = os.path.join(platform_dir, f'search_posts_{target_date}.json')
             if os.path.exists(posts_file):
                 logger.info(f"导入 {platform} 帖子数据: {posts_file}")
-                count = import_posts_with_sdk(supabase, posts_file)
+                count = import_posts_with_sdk(supabase, posts_file, verbose=False)
                 total_posts += count
                 logger.info(f"✅ {platform} 帖子导入完成: {count} 条")
             
             # 导入评论
-            comments_file = os.path.join(platform_dir, f'search_comments_{today}.json')
+            comments_file = os.path.join(platform_dir, f'search_comments_{target_date}.json')
             if os.path.exists(comments_file):
                 logger.info(f"导入 {platform} 评论数据: {comments_file}")
-                count = import_comments_with_sdk(supabase, comments_file)
+                count = import_comments_with_sdk(supabase, comments_file, verbose=False)
                 total_comments += count
                 logger.info(f"✅ {platform} 评论导入完成: {count} 条")
         
@@ -91,18 +98,32 @@ def import_to_database() -> Tuple[int, int]:
         return 0, 0
 
 
-def run_import():
+def run_import(target_date: str = None):
     """
     运行数据库导入
+    
+    Args:
+        target_date: 目标日期，格式 YYYY-MM-DD，默认为今天
     """
     logger.info("=" * 60)
     logger.info("开始数据库导入")
+    if target_date:
+        logger.info(f"目标日期: {target_date}")
     logger.info("=" * 60)
     
-    posts, comments = import_to_database()
+    posts, comments = import_to_database(target_date)
     
     return posts, comments
 
 
 if __name__ == "__main__":
-    run_import()
+    import sys
+    
+    # 支持命令行参数指定日期
+    # 用法: python -m scheduler.importer 2026-03-01
+    target_date = sys.argv[1] if len(sys.argv) > 1 else None
+    
+    if target_date:
+        print(f"📅 导入指定日期数据: {target_date}")
+    
+    run_import(target_date)
