@@ -1,0 +1,863 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>数据管理仪表盘</title>
+    
+    <!-- 引入 TailwindCSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- 引入 ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+    
+    <!-- 引入 Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <style>
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+        }
+        .tab-active {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .chart-container {
+            height: 400px;
+            margin: 20px 0;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            border-top-color: #3b82f6;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            background-color: #f3f4f6;
+            padding: 12px;
+            text-align: left;
+            font-weight: 600;
+        }
+        td {
+            padding: 12px;
+            border-bottom: 1px solid #e5e7eb;
+        }
+        tr:hover {
+            background-color: #f9fafb;
+        }
+        .pagination button {
+            padding: 8px 12px;
+            margin: 0 5px;
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        .pagination button:disabled {
+            background-color: #9ca3af;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="bg-gray-100">
+    
+    <!-- 顶部导航 -->
+    <nav class="bg-white shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <h1 class="text-3xl font-bold text-gray-800">📊 数据管理仪表盘</h1>
+            <p class="text-gray-600 mt-1">社交媒体爬虫数据可视化分析</p>
+        </div>
+    </nav>
+
+    <!-- Tab 导航 -->
+    <div class="max-w-7xl mx-auto px-4 mt-6">
+        <div class="bg-white rounded-lg shadow-md p-4">
+            <div class="flex gap-2">
+                <button onclick="switchTab('overview')" id="tab-overview" class="tab-active px-6 py-2 rounded-lg font-semibold transition">
+                    数据概览
+                </button>
+                <button onclick="switchTab('posts')" id="tab-posts" class="px-6 py-2 rounded-lg font-semibold hover:bg-gray-200 transition">
+                    帖子列表
+                </button>
+                <button onclick="switchTab('comments')" id="tab-comments" class="px-6 py-2 rounded-lg font-semibold hover:bg-gray-200 transition">
+                    评论列表
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 主内容区域 -->
+    <div class="max-w-7xl mx-auto px-4 mt-6 mb-10">
+        
+        <!-- Tab 1: 数据概览 -->
+        <div id="content-overview" class="tab-content">
+            
+            <!-- 统计卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+                <div class="stat-card">
+                    <div class="text-sm opacity-90">总帖子数</div>
+                    <div class="text-3xl font-bold mt-2" id="total-posts">-</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+                    <div class="text-sm opacity-90">总评论数</div>
+                    <div class="text-3xl font-bold mt-2" id="total-comments">-</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);">
+                    <div class="text-sm opacity-90">总点赞数</div>
+                    <div class="text-3xl font-bold mt-2" id="total-likes">-</div>
+                </div>
+                <div class="stat-card" style="background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);">
+                    <div class="text-sm opacity-90">总分享数</div>
+                    <div class="text-3xl font-bold mt-2" id="total-shares">-</div>
+                </div>
+            </div>
+
+            <!-- 图表区域 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-bold mb-4">平台分布</h3>
+                    <div id="chart-platform" class="chart-container"></div>
+                </div>
+                <div class="bg-white rounded-lg shadow-md p-6">
+                    <h3 class="text-xl font-bold mb-4">时间趋势</h3>
+                    <div id="chart-timeline" class="chart-container"></div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+                <h3 class="text-xl font-bold mb-4">热门关键词 Top 10</h3>
+                <div id="chart-keywords" class="chart-container"></div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow-md p-6 mt-6">
+                <h3 class="text-xl font-bold mb-4">热门作者 Top 10</h3>
+                <div id="chart-authors" class="chart-container"></div>
+            </div>
+        </div>
+
+        <!-- Tab 2: 帖子列表 -->
+        <div id="content-posts" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">帖子数据</h3>
+                    <div class="flex gap-4">
+                        <select id="filter-platform" class="px-4 py-2 border rounded-lg" onchange="loadPosts()">
+                            <option value="">全部平台</option>
+                            <option value="xhs">小红书</option>
+                            <option value="weibo">微博</option>
+                            <option value="web">网易新闻</option>
+                        </select>
+                        <input type="text" id="search-posts" placeholder="搜索标题或内容..." 
+                               class="px-4 py-2 border rounded-lg w-64" 
+                               onkeyup="searchPosts()">
+                    </div>
+                </div>
+                
+                <div id="posts-loading" class="text-center py-10">
+                    <div class="loading"></div>
+                    <p class="mt-2 text-gray-600">加载中...</p>
+                </div>
+                
+                <div id="posts-table" class="overflow-x-auto hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>平台</th>
+                                <th>标题</th>
+                                <th>作者</th>
+                                <th>发布时间</th>
+                                <th>点赞</th>
+                                <th>评论</th>
+                                <th>分享</th>
+                                <th>关键词</th>
+                            </tr>
+                        </thead>
+                        <tbody id="posts-tbody"></tbody>
+                    </table>
+                    
+                    <div class="pagination mt-4 flex justify-center items-center gap-2">
+                        <button onclick="changePage('posts', -1)" id="posts-prev">上一页</button>
+                        <span id="posts-page-info" class="mx-4">第 1 页</span>
+                        <button onclick="changePage('posts', 1)" id="posts-next">下一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab 3: 评论列表 -->
+        <div id="content-comments" class="tab-content hidden">
+            <div class="bg-white rounded-lg shadow-md p-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-xl font-bold">评论数据</h3>
+                    <input type="text" id="search-comments" placeholder="搜索评论内容..." 
+                           class="px-4 py-2 border rounded-lg w-64" 
+                           onkeyup="searchComments()">
+                </div>
+                
+                <div id="comments-loading" class="text-center py-10">
+                    <div class="loading"></div>
+                    <p class="mt-2 text-gray-600">加载中...</p>
+                </div>
+                
+                <div id="comments-table" class="overflow-x-auto hidden">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>平台</th>
+                                <th>评论内容</th>
+                                <th>作者</th>
+                                <th>所属帖子/父评论</th>
+                                <th>发布时间</th>
+                                <th>点赞数</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comments-tbody"></tbody>
+                    </table>
+                    
+                    <div class="pagination mt-4 flex justify-center items-center gap-2">
+                        <button onclick="changePage('comments', -1)" id="comments-prev">上一页</button>
+                        <span id="comments-page-info" class="mx-4">第 1 页</span>
+                        <button onclick="changePage('comments', 1)" id="comments-next">下一页</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // ==================== Supabase 配置 ====================
+        const SUPABASE_URL = 'https://rynxtsbrwvexytmztcyh.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bnh0c2Jyd3ZleHl0bXp0Y3loIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njc4NTA5ODUsImV4cCI6MjA4MzQyNjk4NX0.0AGziOeTUQjv1cpaCfNCBST3xz97VxkMs_ggzaxthgo';
+        
+        // 创建 Supabase 客户端
+        let supabaseClient;
+        try {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+            console.log('✅ Supabase 客户端初始化成功');
+        } catch (error) {
+            console.error('❌ Supabase 客户端初始化失败:', error);
+            alert('无法连接到数据库，请检查网络连接');
+        }
+
+        // ==================== 全局变量 ====================
+        let postsData = [];
+        let commentsData = [];
+        let currentPostsPage = 1;
+        let currentCommentsPage = 1;
+        const PAGE_SIZE = 20;
+
+        // ==================== Tab 切换 ====================
+        function switchTab(tabName) {
+            // 隐藏所有内容
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            // 移除所有 tab 激活状态
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('hover:bg-gray-200');
+            });
+            
+            // 显示选中的内容
+            document.getElementById(`content-${tabName}`).classList.remove('hidden');
+            // 激活选中的 tab
+            const activeTab = document.getElementById(`tab-${tabName}`);
+            activeTab.classList.add('tab-active');
+            activeTab.classList.remove('hover:bg-gray-200');
+            
+            // 根据 tab 加载数据
+            if (tabName === 'overview' && !window.overviewLoaded) {
+                loadOverview();
+                window.overviewLoaded = true;
+            } else if (tabName === 'posts' && !window.postsLoaded) {
+                loadPosts();
+                window.postsLoaded = true;
+            } else if (tabName === 'comments' && !window.commentsLoaded) {
+                loadComments();
+                window.commentsLoaded = true;
+            }
+        }
+
+        // ==================== 数据概览 ====================
+        async function loadOverview() {
+            console.log('🚀 开始加载数据概览...');
+            try {
+                // 第一步：获取总数统计
+                console.log('📊 正在查询 posts 表总数...');
+                const { count: totalPostsCount, error: countError } = await supabaseClient
+                    .from('posts')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (countError) {
+                    console.error('❌ Posts 计数失败:', countError);
+                    throw countError;
+                }
+                console.log('✅ Posts 总数:', totalPostsCount);
+
+                // 第二步：分页查询所有数据
+                console.log('📊 开始分页查询所有 posts 数据...');
+                let allPosts = [];
+                const pageSize = 1000;  // 每次查询 1000 条
+                const totalPages = Math.ceil(totalPostsCount / pageSize);
+                
+                console.log(`📄 需要查询 ${totalPages} 页，每页 ${pageSize} 条`);
+                
+                for (let page = 0; page < totalPages; page++) {
+                    const from = page * pageSize;
+                    const to = from + pageSize - 1;
+                    
+                    console.log(`� 正在查询第 ${page + 1}/${totalPages} 页 (${from}-${to})...`);
+                    
+                    const { data: pageData, error: pageError } = await supabaseClient
+                        .from('posts')
+                        .select('platform, metrics_likes, metrics_comments, metrics_shares, tags, author_nickname, publish_time')
+                        .range(from, to);
+                    
+                    if (pageError) {
+                        console.error(`❌ 第 ${page + 1} 页查询失败:`, pageError);
+                        throw pageError;
+                    }
+                    
+                    allPosts = allPosts.concat(pageData);
+                    console.log(`✅ 第 ${page + 1} 页完成，已获取 ${allPosts.length}/${totalPostsCount} 条`);
+                }
+                
+                console.log('✅ 所有 Posts 数据查询完成，总数:', allPosts.length);
+                console.log('📦 第一条数据完整示例:', allPosts[0]);
+                console.log('📦 第一条数据所有字段:', Object.keys(allPosts[0] || {}));
+                console.log('🏷️ 第一条帖子的 tags 值:', allPosts[0]?.tags);
+                console.log('🏷️ tags 类型:', typeof allPosts[0]?.tags);
+                console.log('🏷️ tags 是否为数组:', Array.isArray(allPosts[0]?.tags));
+                
+                // 🔍 检查概览数据中的标签分布
+                const overviewTagsCheck = {
+                    total: allPosts.length,
+                    withTags: allPosts.filter(p => p.tags && (Array.isArray(p.tags) ? p.tags.length > 0 : true)).length,
+                    nullTags: allPosts.filter(p => p.tags === null).length,
+                    undefinedTags: allPosts.filter(p => p.tags === undefined).length,
+                    emptyArrayTags: allPosts.filter(p => Array.isArray(p.tags) && p.tags.length === 0).length,
+                    sampleTags: allPosts.slice(0, 5).map(p => p.tags)
+                };
+                console.log('📊 概览页标签检查:', overviewTagsCheck);
+
+                // 优化：使用 count 而不是查询所有 ID
+                console.log('💬 正在查询 comments 表...');
+                const { count: commentsCount, error: commentsError } = await supabaseClient
+                    .from('comments')
+                    .select('*', { count: 'exact', head: true });
+                
+                if (commentsError) {
+                    console.error('❌ Comments 查询失败:', commentsError);
+                    throw commentsError;
+                }
+                console.log('✅ Comments 查询成功，数量:', commentsCount);
+
+                // 更新统计卡片 - 使用真实的总数
+                document.getElementById('total-posts').textContent = (totalPostsCount || 0).toLocaleString();
+                document.getElementById('total-comments').textContent = (commentsCount || 0).toLocaleString();
+                
+                const totalLikes = allPosts.reduce((sum, p) => sum + (p.metrics_likes || 0), 0);
+                const totalShares = allPosts.reduce((sum, p) => sum + (p.metrics_shares || 0), 0);
+                
+                document.getElementById('total-likes').textContent = totalLikes.toLocaleString();
+                document.getElementById('total-shares').textContent = totalShares.toLocaleString();
+                
+                console.log('📊 统计信息: 总帖子数=' + totalPostsCount + ', 总评论数=' + commentsCount);
+
+                console.log('📈 开始渲染图表...');
+                // 渲染图表 - 使用完整数据
+                renderPlatformChart(allPosts);
+                renderTimelineChart(allPosts);
+                renderKeywordsChart(allPosts);
+                renderAuthorsChart(allPosts);
+                console.log('✅ 数据概览加载完成！');
+
+            } catch (error) {
+                console.error('加载概览数据失败:', error);
+                alert('加载数据失败: ' + error.message);
+            }
+        }
+
+        // 平台分布饼图
+        function renderPlatformChart(posts) {
+            console.log('📊 开始渲染平台分布图，数据量:', posts.length);
+            
+            const platformCount = {};
+            posts.forEach(p => {
+                const platform = p.platform || '未知';
+                platformCount[platform] = (platformCount[platform] || 0) + 1;
+            });
+
+            console.log('📊 平台统计结果:', platformCount);
+
+            const platformNames = {
+                'xhs': '小红书',
+                'weibo': '微博',
+                'web': '网易新闻',
+                'douyin': '抖音',
+                'bilibili': 'B站'
+            };
+
+            const data = Object.entries(platformCount).map(([key, value]) => ({
+                name: platformNames[key] || key,
+                value: value
+            }));
+
+            console.log('📊 饼图数据:', data);
+
+            const chart = echarts.init(document.getElementById('chart-platform'));
+            chart.setOption({
+                tooltip: { 
+                    trigger: 'item',
+                    formatter: '{b}: {c} ({d}%)'
+                },
+                legend: { bottom: '5%', left: 'center' },
+                series: [{
+                    name: '平台分布',
+                    type: 'pie',
+                    radius: ['40%', '70%'],
+                    avoidLabelOverlap: false,
+                    itemStyle: {
+                        borderRadius: 10,
+                        borderColor: '#fff',
+                        borderWidth: 2
+                    },
+                    label: { 
+                        show: true, 
+                        formatter: '{b}: {c}\n({d}%)'
+                    },
+                    emphasis: {
+                        label: { show: true, fontSize: 16, fontWeight: 'bold' }
+                    },
+                    data: data
+                }]
+            });
+        }
+
+        // 时间趋势折线图
+        function renderTimelineChart(posts) {
+            const dateCount = {};
+            posts.forEach(p => {
+                if (p.publish_time) {
+                    const date = p.publish_time.split('T')[0];
+                    dateCount[date] = (dateCount[date] || 0) + 1;
+                }
+            });
+
+            const sortedDates = Object.keys(dateCount).sort();
+            const values = sortedDates.map(date => dateCount[date]);
+
+            const chart = echarts.init(document.getElementById('chart-timeline'));
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: sortedDates,
+                    axisLabel: { rotate: 45 }
+                },
+                yAxis: { type: 'value', name: '帖子数' },
+                series: [{
+                    name: '每日帖子数',
+                    type: 'line',
+                    smooth: true,
+                    data: values,
+                    areaStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: 'rgba(59, 130, 246, 0.5)' },
+                            { offset: 1, color: 'rgba(59, 130, 246, 0.1)' }
+                        ])
+                    }
+                }]
+            });
+        }
+
+        // 热门关键词柱状图
+        function renderKeywordsChart(posts) {
+            const keywordCount = {};
+            posts.forEach(p => {
+                // 从 tags JSONB 字段提取关键词
+                if (p.tags) {
+                    if (Array.isArray(p.tags)) {
+                        // tags 是数组，统计每个标签
+                        p.tags.forEach(tag => {
+                            if (tag) {
+                                keywordCount[tag] = (keywordCount[tag] || 0) + 1;
+                            }
+                        });
+                    } else if (typeof p.tags === 'object') {
+                        // tags 是对象，尝试提取 keywords 等属性
+                        const keywords = p.tags.keywords || p.tags.tags || Object.values(p.tags);
+                        if (Array.isArray(keywords)) {
+                            keywords.forEach(tag => {
+                                if (tag) {
+                                    keywordCount[tag] = (keywordCount[tag] || 0) + 1;
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+
+            const sorted = Object.entries(keywordCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const chart = echarts.init(document.getElementById('chart-keywords'));
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: sorted.map(item => item[0]),
+                    axisLabel: { interval: 0, rotate: 30 }
+                },
+                yAxis: { type: 'value', name: '出现次数' },
+                series: [{
+                    name: '关键词频次',
+                    type: 'bar',
+                    data: sorted.map(item => item[1]),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#667eea' },
+                            { offset: 1, color: '#764ba2' }
+                        ])
+                    }
+                }]
+            });
+        }
+
+        // 热门作者柱状图
+        function renderAuthorsChart(posts) {
+            const authorCount = {};
+            posts.forEach(p => {
+                if (p.author_nickname) {
+                    authorCount[p.author_nickname] = (authorCount[p.author_nickname] || 0) + 1;
+                }
+            });
+
+            const sorted = Object.entries(authorCount)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+
+            const chart = echarts.init(document.getElementById('chart-authors'));
+            chart.setOption({
+                tooltip: { trigger: 'axis' },
+                xAxis: {
+                    type: 'category',
+                    data: sorted.map(item => item[0]),
+                    axisLabel: { interval: 0, rotate: 30 }
+                },
+                yAxis: { type: 'value', name: '发帖数' },
+                series: [{
+                    name: '发帖数',
+                    type: 'bar',
+                    data: sorted.map(item => item[1]),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                            { offset: 0, color: '#f093fb' },
+                            { offset: 1, color: '#f5576c' }
+                        ])
+                    }
+                }]
+            });
+        }
+
+        // ==================== 帖子列表 ====================
+        async function loadPosts() {
+            document.getElementById('posts-loading').classList.remove('hidden');
+            document.getElementById('posts-table').classList.add('hidden');
+
+            try {
+                const platform = document.getElementById('filter-platform').value;
+                
+                // 先获取总数
+                let countQuery = supabaseClient.from('posts').select('*', { count: 'exact', head: true });
+                if (platform) {
+                    countQuery = countQuery.eq('platform', platform);
+                }
+                const { count: totalCount } = await countQuery;
+                
+                console.log(`📋 帖子总数: ${totalCount}${platform ? ` (平台: ${platform})` : ''}`);
+                
+                // 分页查询所有数据
+                let allData = [];
+                const pageSize = 1000;
+                const totalPages = Math.ceil(totalCount / pageSize);
+                
+                for (let page = 0; page < totalPages; page++) {
+                    const from = page * pageSize;
+                    const to = from + pageSize - 1;
+                    
+                    let query = supabaseClient
+                        .from('posts')
+                        .select('*')
+                        .order('publish_time', { ascending: false })
+                        .range(from, to);
+                    
+                    if (platform) {
+                        query = query.eq('platform', platform);
+                    }
+
+                    const { data: pageData, error } = await query;
+                    if (error) throw error;
+                    
+                    allData = allData.concat(pageData);
+                    console.log(`📄 已加载 ${allData.length}/${totalCount} 条帖子`);
+                }
+
+                console.log('✅ 帖子列表查询完成，总数:', allData.length);
+                console.log('🔍 第一条帖子完整数据:', allData[0]);
+                console.log('🔍 第一条帖子所有字段:', Object.keys(allData[0] || {}));
+                console.log('🏷️ 第一条帖子 tags 值:', allData[0]?.tags);
+                console.log('🏷️ 第一条帖子 tags 类型:', typeof allData[0]?.tags);
+                
+                // 🔍 统计 tags 字段情况
+                const tagsStats = {
+                    total: allData.length,
+                    hasTags: allData.filter(p => p.tags && (Array.isArray(p.tags) ? p.tags.length > 0 : true)).length,
+                    isNull: allData.filter(p => p.tags === null).length,
+                    isUndefined: allData.filter(p => p.tags === undefined).length,
+                    isEmptyArray: allData.filter(p => Array.isArray(p.tags) && p.tags.length === 0).length,
+                    samples: allData.slice(0, 10).map(p => ({ 
+                        id: p.id?.substring(0, 8), 
+                        tags: p.tags,
+                        type: typeof p.tags,
+                        isArray: Array.isArray(p.tags)
+                    }))
+                };
+                console.log('📊 Tags 字段统计:', tagsStats);
+
+                postsData = allData;
+                currentPostsPage = 1;
+                renderPostsTable();
+
+                document.getElementById('posts-loading').classList.add('hidden');
+                document.getElementById('posts-table').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('加载帖子数据失败:', error);
+                alert('加载帖子数据失败: ' + error.message);
+            }
+        }
+
+        function renderPostsTable() {
+            const start = (currentPostsPage - 1) * PAGE_SIZE;
+            const end = start + PAGE_SIZE;
+            const pageData = postsData.slice(start, end);
+
+            const platformNames = {
+                'xhs': '小红书',
+                'weibo': '微博',
+                'web': '网易新闻'
+            };
+
+            const tbody = document.getElementById('posts-tbody');
+            
+            // 先清空并检查数据
+            if (pageData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center text-gray-500 py-8">暂无数据</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = pageData.map((post, index) => {
+                // 🔍 调试 - 检查 tags 字段（JSONB 类型）
+                if (index < 3) {
+                    console.log(`\n========== 🏷️ 帖子 ${index + 1} Tags 调试 ==========`);
+                    console.log('tags 原始值:', post.tags);
+                    console.log('tags 类型:', typeof post.tags);
+                    console.log('tags 是否为数组:', Array.isArray(post.tags));
+                    console.log('=======================================\n');
+                }
+                
+                return `
+                    <tr>
+                        <td><span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">${platformNames[post.platform] || post.platform}</span></td>
+                        <td class="max-w-xs truncate" title="${(post.title || '').replace(/"/g, '&quot;')}">${post.title || '无标题'}</td>
+                        <td>${post.author_nickname || '未知'}</td>
+                        <td>${post.publish_time ? new Date(post.publish_time).toLocaleString('zh-CN') : '-'}</td>
+                        <td>${(post.metrics_likes || 0).toLocaleString()}</td>
+                        <td>${(post.metrics_comments || 0).toLocaleString()}</td>
+                        <td>${(post.metrics_shares || 0).toLocaleString()}</td>
+                        <td class="max-w-xs">${(() => { const tags = post.tags; if (!tags) return '<span class="text-gray-400 text-sm">无标签</span>'; if (Array.isArray(tags) && tags.length > 0) return tags.map(tag => '<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs inline-block mr-1 mb-1">'+tag+'</span>').join(''); return '<span class="text-gray-400 text-sm">无标签</span>'; })()}}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const totalPages = Math.ceil(postsData.length / PAGE_SIZE);
+            document.getElementById('posts-page-info').textContent = `第 ${currentPostsPage} / ${totalPages} 页 (共 ${postsData.length} 条)`;
+            document.getElementById('posts-prev').disabled = currentPostsPage === 1;
+            document.getElementById('posts-next').disabled = currentPostsPage >= totalPages;
+        }
+
+        function searchPosts() {
+            const keyword = document.getElementById('search-posts').value.toLowerCase();
+            if (!keyword) {
+                loadPosts();
+                return;
+            }
+
+            const filtered = postsData.filter(post => 
+                (post.title && post.title.toLowerCase().includes(keyword)) ||
+                (post.content && post.content.toLowerCase().includes(keyword))
+            );
+            
+            postsData = filtered;
+            currentPostsPage = 1;
+            renderPostsTable();
+        }
+
+        // ==================== 评论列表 ====================
+        async function loadComments() {
+            document.getElementById('comments-loading').classList.remove('hidden');
+            document.getElementById('comments-table').classList.add('hidden');
+
+            try {
+                // 查询评论数据，包含关联字段
+                const { data: comments, error: commentsError } = await supabaseClient
+                    .from('comments')
+                    .select('*')
+                    .order('publish_time', { ascending: false });
+                
+                if (commentsError) throw commentsError;
+
+                // 获取所有关联的帖子信息（用于显示帖子标题）
+                const contentIds = [...new Set(comments.map(c => c.content_id))];
+                const { data: posts, error: postsError } = await supabaseClient
+                    .from('posts')
+                    .select('id, title')
+                    .in('id', contentIds);
+                
+                // 创建帖子ID到标题的映射
+                const postTitleMap = {};
+                if (posts) {
+                    posts.forEach(post => {
+                        postTitleMap[post.id] = post.title || '无标题';
+                    });
+                }
+
+                // 将帖子标题添加到评论数据中
+                commentsData = comments.map(comment => ({
+                    ...comment,
+                    post_title: postTitleMap[comment.content_id] || '未知帖子'
+                }));
+
+                currentCommentsPage = 1;
+                renderCommentsTable();
+
+                document.getElementById('comments-loading').classList.add('hidden');
+                document.getElementById('comments-table').classList.remove('hidden');
+
+            } catch (error) {
+                console.error('加载评论数据失败:', error);
+                alert('加载评论数据失败: ' + error.message);
+            }
+        }
+
+        function renderCommentsTable() {
+            const start = (currentCommentsPage - 1) * PAGE_SIZE;
+            const end = start + PAGE_SIZE;
+            const pageData = commentsData.slice(start, end);
+
+            const platformNames = {
+                'xhs': '小红书',
+                'weibo': '微博',
+                'web': '网易新闻'
+            };
+
+            const tbody = document.getElementById('comments-tbody');
+            tbody.innerHTML = pageData.map(comment => {
+                // 判断是回复评论还是回复帖子
+                let relationInfo = '';
+                if (comment.parent_comment_id) {
+                    // 这是对评论的回复
+                    relationInfo = `<div class="text-xs text-gray-500">
+                        <span class="bg-yellow-100 text-yellow-800 px-2 py-1 rounded">回复评论</span>
+                        <div class="mt-1">父评论ID: ${comment.parent_comment_id.substring(0, 12)}...</div>
+                    </div>`;
+                } else {
+                    // 这是对帖子的直接评论
+                    relationInfo = `<div class="text-xs text-gray-500">
+                        <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded">帖子评论</span>
+                        <div class="mt-1 truncate max-w-xs" title="${comment.post_title || ''}">📝 ${comment.post_title || '未知帖子'}</div>
+                    </div>`;
+                }
+
+                return `
+                    <tr>
+                        <td><span class="px-2 py-1 bg-green-100 text-green-800 rounded text-sm">${platformNames[comment.platform] || comment.platform}</span></td>
+                        <td class="max-w-md truncate" title="${comment.content || ''}">${comment.content || '无内容'}</td>
+                        <td>${comment.author_nickname || '未知'}</td>
+                        <td>${relationInfo}</td>
+                        <td>${comment.publish_time ? new Date(comment.publish_time).toLocaleString('zh-CN') : '-'}</td>
+                        <td>${(comment.metrics_likes || 0).toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            const totalPages = Math.ceil(commentsData.length / PAGE_SIZE);
+            document.getElementById('comments-page-info').textContent = `第 ${currentCommentsPage} / ${totalPages} 页 (共 ${commentsData.length} 条)`;
+            document.getElementById('comments-prev').disabled = currentCommentsPage === 1;
+            document.getElementById('comments-next').disabled = currentCommentsPage >= totalPages;
+        }
+
+        function searchComments() {
+            const keyword = document.getElementById('search-comments').value.toLowerCase();
+            if (!keyword) {
+                loadComments();
+                return;
+            }
+
+            const filtered = commentsData.filter(comment => 
+                comment.content && comment.content.toLowerCase().includes(keyword)
+            );
+            
+            commentsData = filtered;
+            currentCommentsPage = 1;
+            renderCommentsTable();
+        }
+
+        // ==================== 分页 ====================
+        function changePage(type, direction) {
+            if (type === 'posts') {
+                currentPostsPage += direction;
+                renderPostsTable();
+            } else if (type === 'comments') {
+                currentCommentsPage += direction;
+                renderCommentsTable();
+            }
+        }
+
+        // ==================== 页面加载完成 ====================
+        window.addEventListener('load', () => {
+            loadOverview();
+            window.overviewLoaded = true;
+        });
+
+        // 窗口大小改变时重绘图表
+        window.addEventListener('resize', () => {
+            echarts.getInstanceByDom(document.getElementById('chart-platform'))?.resize();
+            echarts.getInstanceByDom(document.getElementById('chart-timeline'))?.resize();
+            echarts.getInstanceByDom(document.getElementById('chart-keywords'))?.resize();
+            echarts.getInstanceByDom(document.getElementById('chart-authors'))?.resize();
+        });
+    </script>
+
+</body>
+</html>
+
