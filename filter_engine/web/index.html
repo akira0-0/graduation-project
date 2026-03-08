@@ -3,397 +3,568 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>过滤引擎管理系统</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/element-plus/dist/index.css">
-    <script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/element-plus"></script>
+    <title>内容过滤引擎 | Filter Engine v2.2</title>
+    <link rel="stylesheet" href="https://unpkg.com/element-plus/dist/index.css">
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/element-plus"></script>
     <style>
+        :root { --primary: #6366f1; --primary-light: #818cf8; --primary-dark: #4f46e5; --success: #10b981; --warning: #f59e0b; --danger: #ef4444; --info: #3b82f6; --text-1: #111827; --text-2: #374151; --text-3: #6b7280; --text-4: #9ca3af; --bg-1: #ffffff; --bg-2: #f9fafb; --bg-3: #f3f4f6; --border: #e5e7eb; }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background: #f0f2f5; }
+        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: var(--bg-2); min-height: 100vh; }
         .app-container { min-height: 100vh; }
-        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px 40px; }
-        .header h1 { font-size: 24px; font-weight: 600; }
-        .header p { opacity: 0.8; margin-top: 5px; }
-        .main-content { padding: 20px 40px; max-width: 1400px; margin: 0 auto; }
-        .card { background: white; border-radius: 12px; padding: 24px; margin-bottom: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); }
-        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
-        .card-title { font-size: 18px; font-weight: 600; color: #303133; }
-        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
-        .stat-card { background: linear-gradient(135deg, #f5f7fa 0%, #e4e7ed 100%); border-radius: 8px; padding: 20px; text-align: center; }
-        .stat-value { font-size: 32px; font-weight: 700; color: #409eff; }
-        .stat-label { color: #909399; margin-top: 8px; }
-        .test-area { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-        .test-input textarea { width: 100%; height: 150px; border: 1px solid #dcdfe6; border-radius: 8px; padding: 12px; font-size: 14px; resize: vertical; }
-        .test-result { background: #f5f7fa; border-radius: 8px; padding: 16px; min-height: 150px; }
-        .result-badge { display: inline-block; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 500; }
-        .result-spam { background: #fef0f0; color: #f56c6c; }
-        .result-clean { background: #f0f9eb; color: #67c23a; }
-        .result-suspicious { background: #fdf6ec; color: #e6a23c; }
-        .rule-type { padding: 2px 8px; border-radius: 4px; font-size: 12px; }
-        .type-keyword { background: #ecf5ff; color: #409eff; }
-        .type-regex { background: #fdf6ec; color: #e6a23c; }
-        .type-pattern { background: #f0f9eb; color: #67c23a; }
-        @media (max-width: 768px) {
-            .test-area { grid-template-columns: 1fr; }
-            .main-content { padding: 15px; }
-        }
+        .header { background: linear-gradient(135deg, #1e1b4b 0%, #312e81 50%, #4338ca 100%); color: white; padding: 20px 32px; }
+        .header-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; }
+        .header-brand { display: flex; align-items: center; gap: 16px; }
+        .header-logo { width: 48px; height: 48px; background: rgba(255,255,255,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .header-title { font-size: 24px; font-weight: 700; }
+        .header-subtitle { font-size: 13px; opacity: 0.7; margin-top: 2px; }
+        .header-status { display: flex; align-items: center; gap: 8px; background: rgba(16,185,129,0.2); padding: 8px 16px; border-radius: 24px; font-size: 13px; }
+        .header-status-dot { width: 8px; height: 8px; background: #10b981; border-radius: 50%; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+        .nav-bar { background: var(--bg-1); border-bottom: 1px solid var(--border); position: sticky; top: 0; z-index: 100; }
+        .nav-inner { max-width: 1400px; margin: 0 auto; padding: 0 32px; display: flex; gap: 8px; }
+        .nav-item { padding: 16px 24px; font-size: 14px; font-weight: 500; color: var(--text-3); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; display: flex; align-items: center; gap: 8px; }
+        .nav-item:hover { color: var(--text-1); background: var(--bg-2); }
+        .nav-item.active { color: var(--primary); border-bottom-color: var(--primary); }
+        .main-content { max-width: 1400px; margin: 0 auto; padding: 32px; }
+        .card { background: var(--bg-1); border-radius: 16px; border: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,0.05); overflow: hidden; margin-bottom: 24px; }
+        .card-header { padding: 20px 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .card-title { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .card-body { padding: 24px; }
+        .smart-match-layout { display: grid; grid-template-columns: 1fr 1.2fr; gap: 24px; }
+        @media (max-width: 1024px) { .smart-match-layout { grid-template-columns: 1fr; } }
+        .input-label { font-size: 13px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 12px; }
+        .input-textarea { width: 100%; min-height: 200px; padding: 16px; border: 2px solid var(--border); border-radius: 12px; font-size: 15px; line-height: 1.7; resize: vertical; font-family: inherit; }
+        .input-textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 4px rgba(99,102,241,0.1); }
+        .input-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 12px; }
+        .char-count { font-size: 12px; color: var(--text-4); }
+        .input-actions { display: flex; gap: 12px; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all 0.2s; border: none; }
+        .btn-primary { background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; box-shadow: 0 4px 14px rgba(99,102,241,0.4); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(99,102,241,0.5); }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: var(--bg-3); color: var(--text-2); }
+        .btn-secondary:hover { background: var(--border); }
+        .btn-success { background: linear-gradient(135deg, var(--success), #059669); color: white; }
+        .btn-sm { padding: 8px 16px; font-size: 13px; }
+        .result-section { background: var(--bg-2); border-radius: 12px; padding: 20px; min-height: 200px; }
+        .result-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; color: var(--text-4); }
+        .result-empty .icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+        .loading-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 200px; }
+        .loading-brain { font-size: 48px; animation: think 1.5s ease-in-out infinite; }
+        @keyframes think { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+        .loading-text { margin-top: 16px; font-size: 14px; color: var(--text-3); }
+        .loading-dots::after { content: ""; animation: dots 1.5s infinite; }
+        @keyframes dots { 0% { content: ""; } 33% { content: "."; } 66% { content: ".."; } 100% { content: "..."; } }
+        .thought-chain { margin-top: 20px; }
+        .thought-chain-header { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+        .thought-chain-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+        .thought-chain-badge { padding: 4px 10px; background: linear-gradient(135deg, #fef3c7, #fde68a); color: #92400e; border-radius: 12px; font-size: 11px; font-weight: 600; }
+        .thought-steps { display: flex; flex-direction: column; gap: 12px; }
+        .thought-step { background: var(--bg-1); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+        .thought-step-header { padding: 14px 18px; background: linear-gradient(to right, var(--bg-2), var(--bg-1)); display: flex; align-items: center; gap: 12px; cursor: pointer; }
+        .thought-step-number { width: 28px; height: 28px; background: linear-gradient(135deg, var(--primary), var(--primary-dark)); color: white; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; }
+        .thought-step-title { font-size: 14px; font-weight: 600; color: var(--text-1); flex: 1; }
+        .thought-step-icon { color: var(--text-4); transition: transform 0.3s; }
+        .thought-step.expanded .thought-step-icon { transform: rotate(180deg); }
+        .thought-step-content { padding: 0 18px 18px; font-size: 14px; line-height: 1.8; color: var(--text-2); white-space: pre-wrap; }
+        .match-result-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+        .match-badge { padding: 8px 16px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        .match-badge.filter { background: linear-gradient(135deg, #fef2f2, #fee2e2); color: #dc2626; }
+        .match-badge.select { background: linear-gradient(135deg, #eff6ff, #dbeafe); color: #2563eb; }
+        .match-badge.none { background: linear-gradient(135deg, #ecfdf5, #d1fae5); color: #059669; }
+        .matched-rules { margin-top: 16px; }
+        .matched-rules-title { font-size: 13px; font-weight: 600; color: var(--text-3); margin-bottom: 12px; text-transform: uppercase; }
+        .matched-rule-item { background: var(--bg-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; margin-bottom: 10px; display: flex; align-items: center; gap: 12px; }
+        .matched-rule-icon { width: 36px; height: 36px; background: var(--bg-3); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+        .matched-rule-info { flex: 1; }
+        .matched-rule-name { font-size: 14px; font-weight: 600; color: var(--text-1); }
+        .matched-rule-reason { font-size: 12px; color: var(--text-3); margin-top: 2px; }
+        .matched-rule-purpose { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .matched-rule-purpose.filter { background: #fef2f2; color: #dc2626; }
+        .matched-rule-purpose.select { background: #eff6ff; color: #2563eb; }
+        .suggested-rule-card { background: linear-gradient(135deg, #fefce8, #fef9c3); border: 1px solid #fde047; border-radius: 12px; padding: 16px; margin-bottom: 12px; position: relative; }
+        .suggested-rule-card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: linear-gradient(to bottom, #eab308, #ca8a04); }
+        .suggested-rule-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 12px; }
+        .suggested-rule-name { font-size: 15px; font-weight: 600; color: var(--text-1); }
+        .suggested-rule-type { padding: 4px 10px; background: rgba(0,0,0,0.08); border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .suggested-rule-content { font-family: Monaco, Menlo, monospace; font-size: 13px; background: rgba(255,255,255,0.6); padding: 12px; border-radius: 8px; color: var(--text-2); word-break: break-all; margin-bottom: 12px; }
+        .suggested-rule-reason { font-size: 13px; color: var(--text-3); margin-bottom: 12px; display: flex; align-items: flex-start; gap: 6px; }
+        .suggested-rule-actions { display: flex; gap: 8px; }
+        .suggested-rule-actions .btn { flex: 1; }
+        .batch-stats { display: flex; gap: 24px; padding: 16px 20px; background: var(--bg-2); border-radius: 10px; margin-bottom: 20px; }
+        .batch-stat-item { display: flex; align-items: center; gap: 12px; }
+        .batch-stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+        .batch-stat-icon.total { background: linear-gradient(135deg, #f3f4f6, #e5e7eb); }
+        .batch-stat-icon.matched { background: linear-gradient(135deg, #fef2f2, #fee2e2); }
+        .batch-stat-icon.passed { background: linear-gradient(135deg, #ecfdf5, #d1fae5); }
+        .batch-stat-value { font-size: 24px; font-weight: 700; color: var(--text-1); }
+        .batch-stat-label { font-size: 12px; color: var(--text-3); }
+        .batch-results-table { width: 100%; border-collapse: collapse; }
+        .batch-results-table th { text-align: left; padding: 14px 16px; font-size: 12px; font-weight: 600; text-transform: uppercase; color: var(--text-3); background: var(--bg-2); }
+        .batch-results-table td { padding: 14px 16px; font-size: 14px; border-bottom: 1px solid var(--border); }
+        .batch-results-table tr:hover td { background: var(--bg-2); }
+        .content-cell { max-width: 500px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .batch-status-badge { padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 600; }
+        .batch-status-badge.matched { background: #fef2f2; color: #dc2626; }
+        .batch-status-badge.passed { background: #ecfdf5; color: #059669; }
+        .rules-toolbar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; }
+        .search-box { position: relative; width: 300px; }
+        .search-box input { width: 100%; padding: 10px 16px 10px 42px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; }
+        .search-box input:focus { outline: none; border-color: var(--primary); }
+        .search-box .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--text-4); }
+        .filter-tabs { display: flex; gap: 4px; padding: 4px; background: var(--bg-3); border-radius: 10px; }
+        .filter-tab { padding: 8px 16px; border: none; background: transparent; border-radius: 8px; font-size: 13px; font-weight: 500; color: var(--text-3); cursor: pointer; }
+        .filter-tab.active { background: var(--bg-1); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .rules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
+        .rule-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: all 0.2s; }
+        .rule-card:hover { border-color: var(--primary-light); box-shadow: 0 8px 24px rgba(99,102,241,0.12); transform: translateY(-2px); }
+        .rule-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+        .rule-card-name { font-size: 16px; font-weight: 600; color: var(--text-1); }
+        .rule-card-purpose { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .rule-card-purpose.filter { background: #fef2f2; color: #dc2626; }
+        .rule-card-purpose.select { background: #eff6ff; color: #2563eb; }
+        .rule-card-pattern { font-family: Monaco, Menlo, monospace; font-size: 13px; background: var(--bg-2); padding: 14px; border-radius: 10px; color: var(--text-2); word-break: break-all; max-height: 100px; overflow-y: auto; margin-bottom: 16px; }
+        .rule-card-footer { display: flex; align-items: center; justify-content: space-between; }
+        .rule-card-priority { font-size: 12px; color: var(--text-4); }
+        .rule-card-actions { display: flex; gap: 8px; }
+        .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 8px; background: var(--bg-2); color: var(--text-3); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .btn-icon:hover { background: var(--bg-3); }
+        .btn-icon.delete:hover { background: #fef2f2; color: #dc2626; }
+        .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; opacity: 0; visibility: hidden; transition: all 0.3s; }
+        .dialog-overlay.active { opacity: 1; visibility: visible; }
+        .dialog { background: var(--bg-1); border-radius: 20px; width: 100%; max-width: 520px; max-height: 90vh; overflow: hidden; transform: translateY(20px) scale(0.95); transition: all 0.3s; }
+        .dialog-overlay.active .dialog { transform: translateY(0) scale(1); }
+        .dialog-header { padding: 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+        .dialog-title { font-size: 18px; font-weight: 700; }
+        .dialog-close { width: 36px; height: 36px; border: none; background: var(--bg-3); border-radius: 10px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .dialog-body { padding: 24px; overflow-y: auto; max-height: calc(90vh - 160px); }
+        .dialog-footer { padding: 20px 24px; border-top: 1px solid var(--border); display: flex; justify-content: flex-end; gap: 12px; background: var(--bg-2); }
+        .form-group { margin-bottom: 20px; }
+        .form-label { display: block; font-size: 13px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+        .form-label .required { color: var(--danger); }
+        .form-input { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; }
+        .form-input:focus { outline: none; border-color: var(--primary); }
+        .form-select { width: 100%; padding: 12px 16px; border: 1px solid var(--border); border-radius: 10px; font-size: 14px; background: var(--bg-1); }
+        .form-hint { font-size: 12px; color: var(--text-4); margin-top: 6px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        .empty-state { text-align: center; padding: 60px 24px; }
+        .empty-state .icon { font-size: 64px; margin-bottom: 20px; opacity: 0.6; }
+        .empty-state .title { font-size: 18px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
+        .empty-state .desc { font-size: 14px; color: var(--text-4); }
+        .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
     <div id="app" class="app-container">
-        <div class="header">
-            <h1>🔍 数据过滤引擎</h1>
-            <p>规则过滤 + LLM语义分析 协同决策系统</p>
-        </div>
-        
-        <div class="main-content">
-            <!-- 统计卡片 -->
-            <div class="stats-grid">
-                <div class="stat-card">
-                    <div class="stat-value">{{ stats.rules?.total || 0 }}</div>
-                    <div class="stat-label">规则总数</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" style="color: #67c23a;">{{ stats.rules?.enabled || 0 }}</div>
-                    <div class="stat-label">已启用</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" style="color: #e6a23c;">{{ stats.cache?.hit_rate ? (stats.cache.hit_rate * 100).toFixed(1) + '%' : 'N/A' }}</div>
-                    <div class="stat-label">缓存命中率</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" style="color: #909399;">{{ stats.llm_available ? '✓' : '✗' }}</div>
-                    <div class="stat-label">LLM状态</div>
-                </div>
-            </div>
-            
-            <!-- 快速测试 -->
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">⚡ 快速测试</span>
-                </div>
-                <div class="test-area">
-                    <div class="test-input">
-                        <textarea v-model="testText" placeholder="输入待检测的文本内容..."></textarea>
-                        <div style="margin-top: 12px;">
-                            <el-button type="primary" @click="testFilter(false)" :loading="testing">规则过滤</el-button>
-                            <el-button type="success" @click="testFilter(true)" :loading="testing">规则 + LLM</el-button>
-                        </div>
-                    </div>
-                    <div class="test-result">
-                        <template v-if="testResult">
-                            <div style="margin-bottom: 12px;">
-                                <span class="result-badge" :class="getResultClass(testResult)">
-                                    {{ testResult.is_spam ? '⚠️ 垃圾信息' : '✅ 正常内容' }}
-                                </span>
-                                <span style="margin-left: 12px; color: #909399;">
-                                    置信度: {{ (testResult.confidence * 100).toFixed(1) }}%
-                                </span>
-                            </div>
-                            <div v-if="testResult.matched_rules?.length" style="margin-bottom: 8px;">
-                                <strong>命中规则:</strong> {{ testResult.matched_rules.join(', ') }}
-                            </div>
-                            <div v-if="testResult.category" style="margin-bottom: 8px;">
-                                <strong>分类:</strong> {{ testResult.category }}
-                            </div>
-                            <div v-if="testResult.llm_reason" style="margin-bottom: 8px;">
-                                <strong>LLM理由:</strong> {{ testResult.llm_reason }}
-                            </div>
-                            <div style="color: #909399; font-size: 12px;">
-                                来源: {{ testResult.source }}
-                            </div>
-                        </template>
-                        <div v-else style="color: #909399; text-align: center; padding-top: 50px;">
-                            输入文本后点击测试按钮
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 规则管理 -->
-            <div class="card">
-                <div class="card-header">
-                    <span class="card-title">📋 规则管理</span>
+        <header class="header">
+            <div class="header-inner">
+                <div class="header-brand">
+                    <div class="header-logo">⚡</div>
                     <div>
-                        <el-button type="primary" size="small" @click="showAddDialog">添加规则</el-button>
-                        <el-button size="small" @click="loadRules">刷新</el-button>
-                        <el-button size="small" @click="exportRules">导出</el-button>
+                        <div class="header-title">内容过滤引擎</div>
+                        <div class="header-subtitle">Filter Engine v2.2 · AI-Powered</div>
                     </div>
                 </div>
-                
-                <el-table :data="rules" style="width: 100%" v-loading="loadingRules">
-                    <el-table-column prop="id" label="ID" width="60" />
-                    <el-table-column prop="name" label="规则名称" min-width="150" />
-                    <el-table-column prop="type" label="类型" width="100">
-                        <template #default="{ row }">
-                            <span class="rule-type" :class="'type-' + row.type">{{ row.type }}</span>
-                        </template>
-                    </el-table-column>
-                    <el-table-column prop="category" label="分类" width="100">
-                        <template #default="{ row }">
-                            <el-tag size="small" v-if="row.category">{{ row.category }}</el-tag>
-                            <span v-else style="color: #c0c4cc;">-</span>
-                        </template>
-                    </el-table-column>
-                    <el-table-column prop="priority" label="优先级" width="80" />
-                    <el-table-column prop="enabled" label="状态" width="80">
-                        <template #default="{ row }">
-                            <el-switch v-model="row.enabled" @change="toggleRule(row)" />
-                        </template>
-                    </el-table-column>
-                    <el-table-column label="操作" width="200">
-                        <template #default="{ row }">
-                            <el-button size="small" @click="editRule(row)">编辑</el-button>
-                            <el-button size="small" @click="showVersions(row)">版本</el-button>
-                            <el-button size="small" type="danger" @click="deleteRule(row)">删除</el-button>
-                        </template>
-                    </el-table-column>
-                </el-table>
+                <div class="header-status">
+                    <span class="header-status-dot"></span>
+                    <span>服务运行中</span>
+                </div>
+            </div>
+        </header>
+        <nav class="nav-bar">
+            <div class="nav-inner">
+                <div class="nav-item" :class="{ active: currentPage === 'smart' }" @click="currentPage = 'smart'">
+                    <span>🧠</span><span>智能匹配</span>
+                </div>
+                <div class="nav-item" :class="{ active: currentPage === 'batch' }" @click="currentPage = 'batch'">
+                    <span>📋</span><span>批量测试</span>
+                </div>
+                <div class="nav-item" :class="{ active: currentPage === 'rules' }" @click="currentPage = 'rules'">
+                    <span>📝</span><span>规则管理</span>
+                </div>
+            </div>
+        </nav>
+        <main class="main-content">
+            <div v-show="currentPage === 'smart'">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><span>🎯</span>智能规则匹配</div>
+                        <div style="font-size: 13px; color: var(--text-4);">LLM 驱动的智能规则理解与生成</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="smart-match-layout">
+                            <div>
+                                <div class="input-label">输入查询或内容</div>
+                                <textarea class="input-textarea" v-model="smartQuery" placeholder="输入自然语言查询，例如：&#10;• 帮我找便宜的丽江民宿，别看广告&#10;• 过滤掉所有推广内容，只保留高赞评论"></textarea>
+                                <div class="input-footer">
+                                    <span class="char-count">{{ smartQuery.length }} 字符</span>
+                                    <div class="input-actions">
+                                        <button class="btn btn-secondary" @click="smartQuery = ''; smartResult = null;">清空</button>
+                                        <button class="btn btn-primary" @click="doSmartMatch" :disabled="smartLoading || !smartQuery.trim()">
+                                            <span v-if="smartLoading" class="spinner"></span>
+                                            <span v-else>🚀</span>
+                                            {{ smartLoading ? 'AI分析中...' : '开始智能匹配' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="result-section">
+                                <div v-if="!smartLoading && !smartResult" class="result-empty">
+                                    <span class="icon">🔮</span>
+                                    <span>输入查询后，AI将分析并匹配最相关的规则</span>
+                                </div>
+                                <div v-if="smartLoading" class="loading-container">
+                                    <div class="loading-brain">🧠</div>
+                                    <div class="loading-text">AI正在思考中<span class="loading-dots"></span></div>
+                                </div>
+                                <div v-if="!smartLoading && smartResult">
+                                    <div class="match-result-header">
+                                        <span class="match-badge" :class="getSmartResultBadgeClass()">{{ getSmartResultBadgeText() }}</span>
+                                    </div>
+                                    <div v-if="smartResult.thought_trace" class="thought-chain">
+                                        <div class="thought-chain-header">
+                                            <span class="thought-chain-title">💭 AI 思维链</span>
+                                            <span class="thought-chain-badge">Chain of Thought</span>
+                                        </div>
+                                        <div class="thought-steps">
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step1 }" v-if="smartResult.thought_trace.step_1_extraction">
+                                                <div class="thought-step-header" @click="expandedSteps.step1 = !expandedSteps.step1">
+                                                    <span class="thought-step-number">1</span>
+                                                    <span class="thought-step-title">约束提取</span>
+                                                    <span class="thought-step-icon">▼</span>
+                                                </div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step1">{{ smartResult.thought_trace.step_1_extraction }}</div>
+                                            </div>
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step2 }" v-if="smartResult.thought_trace.step_2_match">
+                                                <div class="thought-step-header" @click="expandedSteps.step2 = !expandedSteps.step2">
+                                                    <span class="thought-step-number">2</span>
+                                                    <span class="thought-step-title">规则匹配</span>
+                                                    <span class="thought-step-icon">▼</span>
+                                                </div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step2">{{ smartResult.thought_trace.step_2_match }}</div>
+                                            </div>
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step3 }" v-if="smartResult.thought_trace.step_3_gap_analysis">
+                                                <div class="thought-step-header" @click="expandedSteps.step3 = !expandedSteps.step3">
+                                                    <span class="thought-step-number">3</span>
+                                                    <span class="thought-step-title">缺口分析</span>
+                                                    <span class="thought-step-icon">▼</span>
+                                                </div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step3">{{ smartResult.thought_trace.step_3_gap_analysis }}</div>
+                                            </div>
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step4 }" v-if="smartResult.thought_trace.step_4_generation">
+                                                <div class="thought-step-header" @click="expandedSteps.step4 = !expandedSteps.step4">
+                                                    <span class="thought-step-number">4</span>
+                                                    <span class="thought-step-title">规则生成</span>
+                                                    <span class="thought-step-icon">▼</span>
+                                                </div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step4">{{ smartResult.thought_trace.step_4_generation }}</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div v-if="smartResult.matched_rules && smartResult.matched_rules.length > 0" class="matched-rules">
+                                        <div class="matched-rules-title">✅ 匹配到的规则</div>
+                                        <div v-for="rule in smartResult.matched_rules" :key="rule.rule_id" class="matched-rule-item">
+                                            <div class="matched-rule-icon">📌</div>
+                                            <div class="matched-rule-info">
+                                                <div class="matched-rule-name">{{ rule.rule_name }}</div>
+                                                <div class="matched-rule-reason">{{ rule.match_reason }}</div>
+                                            </div>
+                                            <span class="matched-rule-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                        </div>
+                                    </div>
+                                    <div v-if="smartResult.generated_rules && smartResult.generated_rules.length > 0" class="matched-rules" style="margin-top: 20px;">
+                                        <div class="matched-rules-title">🆕 AI 生成的规则</div>
+                                        <div v-for="(rule, idx) in smartResult.generated_rules" :key="idx" class="matched-rule-item">
+                                            <div class="matched-rule-icon">✨</div>
+                                            <div class="matched-rule-info">
+                                                <div class="matched-rule-name">{{ rule.name }}</div>
+                                                <div class="matched-rule-reason">{{ rule.description }}</div>
+                                            </div>
+                                            <span class="matched-rule-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card" v-if="smartResult && smartResult.suggest_save && smartResult.suggest_save.length > 0">
+                    <div class="card-header">
+                        <div class="card-title"><span>💡</span>建议保存的规则</div>
+                        <button class="btn btn-success btn-sm" @click="saveAllSuggested" :disabled="savingRules">
+                            <span v-if="savingRules" class="spinner" style="width:14px;height:14px;"></span>
+                            全部保存
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div v-for="(rule, idx) in smartResult.suggest_save" :key="idx" class="suggested-rule-card">
+                            <div class="suggested-rule-header">
+                                <span class="suggested-rule-name">{{ rule.name }}</span>
+                                <span class="suggested-rule-type">{{ rule.type }} · {{ rule.purpose === 'select' ? '保留规则' : '过滤规则' }}</span>
+                            </div>
+                            <div class="suggested-rule-content">{{ JSON.stringify(rule.rule, null, 2) }}</div>
+                            <div class="suggested-rule-reason">
+                                <span>💬</span><span>{{ rule.reason }}</span>
+                            </div>
+                            <div class="suggested-rule-actions">
+                                <button class="btn btn-secondary btn-sm" @click="ignoreSuggestedRule(idx)">忽略</button>
+                                <button class="btn btn-success btn-sm" @click="saveSuggestedRule(rule, idx)" :disabled="rule.saving">
+                                    <span v-if="rule.saving" class="spinner" style="width:14px;height:14px;"></span>
+                                    {{ rule.saving ? '保存中...' : '保存规则' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-show="currentPage === 'batch'">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><span>📋</span>批量内容测试</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="input-label">输入待测试内容（每行一条）</div>
+                        <textarea class="input-textarea" v-model="batchContent" placeholder="每行输入一条内容进行测试..." style="min-height: 150px;"></textarea>
+                        <div class="input-footer">
+                            <span class="char-count">{{ batchContent.split('\n').filter(l => l.trim()).length }} 条内容</span>
+                            <div class="input-actions">
+                                <button class="btn btn-secondary" @click="batchContent = ''; batchResults = [];">清空</button>
+                                <button class="btn btn-primary" @click="doBatchTest" :disabled="batchLoading">
+                                    <span v-if="batchLoading" class="spinner"></span>
+                                    <span v-else>⚡</span>
+                                    {{ batchLoading ? '测试中...' : '开始批量测试' }}
+                                </button>
+                            </div>
+                        </div>
+                        <div v-if="batchResults.length > 0" style="margin-top: 24px;">
+                            <div class="batch-stats">
+                                <div class="batch-stat-item">
+                                    <div class="batch-stat-icon total">📊</div>
+                                    <div><div class="batch-stat-value">{{ batchResults.length }}</div><div class="batch-stat-label">总数</div></div>
+                                </div>
+                                <div class="batch-stat-item">
+                                    <div class="batch-stat-icon matched">✕</div>
+                                    <div><div class="batch-stat-value">{{ batchResults.filter(r => r.matched).length }}</div><div class="batch-stat-label">命中规则</div></div>
+                                </div>
+                                <div class="batch-stat-item">
+                                    <div class="batch-stat-icon passed">✓</div>
+                                    <div><div class="batch-stat-value">{{ batchResults.filter(r => !r.matched).length }}</div><div class="batch-stat-label">通过</div></div>
+                                </div>
+                            </div>
+                            <table class="batch-results-table">
+                                <thead><tr><th style="width:60px;">#</th><th style="width:100px;">状态</th><th>内容</th><th style="width:180px;">匹配规则</th></tr></thead>
+                                <tbody>
+                                    <tr v-for="(item, idx) in batchResults" :key="idx">
+                                        <td>{{ idx + 1 }}</td>
+                                        <td><span class="batch-status-badge" :class="item.matched ? 'matched' : 'passed'">{{ item.matched ? '命中' : '通过' }}</span></td>
+                                        <td class="content-cell" :title="item.content">{{ item.content }}</td>
+                                        <td>{{ item.rule || '-' }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-show="currentPage === 'rules'">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><span>📝</span>规则管理</div>
+                        <button class="btn btn-primary" @click="showAddRuleDialog"><span>+</span> 添加规则</button>
+                    </div>
+                    <div class="card-body">
+                        <div class="rules-toolbar">
+                            <div class="search-box">
+                                <span class="icon">🔍</span>
+                                <input type="text" v-model="searchQuery" placeholder="搜索规则名称或内容...">
+                            </div>
+                            <div class="filter-tabs">
+                                <button class="filter-tab" :class="{ active: ruleFilter === 'all' }" @click="ruleFilter = 'all'">全部 ({{ rules.length }})</button>
+                                <button class="filter-tab" :class="{ active: ruleFilter === 'filter' }" @click="ruleFilter = 'filter'">过滤 ({{ rules.filter(r => (r.purpose || 'filter') === 'filter').length }})</button>
+                                <button class="filter-tab" :class="{ active: ruleFilter === 'select' }" @click="ruleFilter = 'select'">保留 ({{ rules.filter(r => r.purpose === 'select').length }})</button>
+                            </div>
+                        </div>
+                        <div class="rules-grid" v-if="filteredRules.length > 0">
+                            <div class="rule-card" v-for="rule in filteredRules" :key="rule.id">
+                                <div class="rule-card-header">
+                                    <span class="rule-card-name">{{ rule.name }}</span>
+                                    <span class="rule-card-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                </div>
+                                <div class="rule-card-pattern">{{ rule.pattern }}</div>
+                                <div class="rule-card-footer">
+                                    <span class="rule-card-priority">⚡ 优先级 {{ rule.priority || 0 }}</span>
+                                    <div class="rule-card-actions">
+                                        <button class="btn-icon" @click="editRule(rule)">✏️</button>
+                                        <button class="btn-icon delete" @click="deleteRule(rule.id)">🗑️</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div v-else class="empty-state">
+                            <span class="icon">📭</span>
+                            <div class="title">暂无规则</div>
+                            <div class="desc">点击"添加规则"创建第一条过滤规则</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div class="dialog-overlay" :class="{ active: ruleDialogVisible }" @click.self="ruleDialogVisible = false">
+            <div class="dialog">
+                <div class="dialog-header">
+                    <span class="dialog-title">{{ editingRule ? '编辑规则' : '添加规则' }}</span>
+                    <button class="dialog-close" @click="ruleDialogVisible = false">✕</button>
+                </div>
+                <div class="dialog-body">
+                    <div class="form-group">
+                        <label class="form-label">规则名称 <span class="required">*</span></label>
+                        <input class="form-input" v-model="ruleForm.name" placeholder="输入规则名称">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">匹配模式 <span class="required">*</span></label>
+                        <textarea class="form-input" v-model="ruleForm.pattern" placeholder="输入关键词，多个用 | 分隔" rows="4" style="resize: vertical; font-family: Monaco, Menlo, monospace;"></textarea>
+                        <div class="form-hint">支持正则表达式，多个关键词使用 | 分隔</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">规则类型</label>
+                            <select class="form-select" v-model="ruleForm.purpose">
+                                <option value="filter">过滤（命中即删除）</option>
+                                <option value="select">保留（命中即保留）</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">优先级</label>
+                            <input class="form-input" type="number" v-model.number="ruleForm.priority" placeholder="0">
+                            <div class="form-hint">数字越大优先级越高</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="dialog-footer">
+                    <button class="btn btn-secondary" @click="ruleDialogVisible = false">取消</button>
+                    <button class="btn btn-primary" @click="saveRule">保存</button>
+                </div>
             </div>
         </div>
-        
-        <!-- 添加/编辑规则对话框 -->
-        <el-dialog v-model="ruleDialog.visible" :title="ruleDialog.isEdit ? '编辑规则' : '添加规则'" width="600px">
-            <el-form :model="ruleDialog.form" label-width="80px">
-                <el-form-item label="名称">
-                    <el-input v-model="ruleDialog.form.name" placeholder="规则名称" />
-                </el-form-item>
-                <el-form-item label="类型">
-                    <el-select v-model="ruleDialog.form.type" style="width: 100%;">
-                        <el-option label="关键词" value="keyword" />
-                        <el-option label="正则表达式" value="regex" />
-                        <el-option label="模式规则" value="pattern" />
-                    </el-select>
-                </el-form-item>
-                <el-form-item label="内容">
-                    <el-input v-model="ruleDialog.form.content" type="textarea" :rows="4" 
-                        :placeholder="getContentPlaceholder(ruleDialog.form.type)" />
-                </el-form-item>
-                <el-form-item label="分类">
-                    <el-select v-model="ruleDialog.form.category" style="width: 100%;" clearable>
-                        <el-option label="垃圾信息" value="spam" />
-                        <el-option label="广告" value="ad" />
-                        <el-option label="敏感内容" value="sensitive" />
-                        <el-option label="不当言论" value="profanity" />
-                    </el-select>
-                </el-form-item>
-                <el-form-item label="优先级">
-                    <el-input-number v-model="ruleDialog.form.priority" :min="0" :max="100" />
-                </el-form-item>
-                <el-form-item label="描述">
-                    <el-input v-model="ruleDialog.form.description" type="textarea" :rows="2" placeholder="规则描述（可选）" />
-                </el-form-item>
-                <el-form-item label="启用">
-                    <el-switch v-model="ruleDialog.form.enabled" />
-                </el-form-item>
-            </el-form>
-            <template #footer>
-                <el-button @click="ruleDialog.visible = false">取消</el-button>
-                <el-button type="primary" @click="saveRule">保存</el-button>
-            </template>
-        </el-dialog>
-        
-        <!-- 版本历史对话框 -->
-        <el-dialog v-model="versionDialog.visible" title="版本历史" width="600px">
-            <el-table :data="versionDialog.versions" style="width: 100%">
-                <el-table-column prop="version" label="版本" width="80" />
-                <el-table-column prop="created_at" label="创建时间" width="180" />
-                <el-table-column prop="content" label="内容" show-overflow-tooltip />
-                <el-table-column label="操作" width="100">
-                    <template #default="{ row }">
-                        <el-button size="small" @click="rollbackVersion(row)">回滚</el-button>
-                    </template>
-                </el-table-column>
-            </el-table>
-        </el-dialog>
     </div>
-    
     <script>
-        const { createApp, ref, reactive, onMounted } = Vue;
-        
+        const { createApp, ref, computed, reactive, onMounted } = Vue;
         createApp({
             setup() {
+                const API_BASE = '';
+                const currentPage = ref('smart');
+                const smartQuery = ref('');
+                const smartLoading = ref(false);
+                const smartResult = ref(null);
+                const savingRules = ref(false);
+                const expandedSteps = reactive({ step1: true, step2: true, step3: true, step4: true });
+                const batchContent = ref('');
+                const batchLoading = ref(false);
+                const batchResults = ref([]);
                 const rules = ref([]);
-                const stats = ref({});
-                const loadingRules = ref(false);
-                const testing = ref(false);
-                const testText = ref('');
-                const testResult = ref(null);
-                
-                const ruleDialog = reactive({
-                    visible: false,
-                    isEdit: false,
-                    editId: null,
-                    form: {
-                        name: '',
-                        type: 'keyword',
-                        content: '',
-                        category: null,
-                        priority: 50,
-                        enabled: true,
-                        description: ''
+                const searchQuery = ref('');
+                const ruleFilter = ref('all');
+                const ruleDialogVisible = ref(false);
+                const editingRule = ref(null);
+                const ruleForm = ref({ name: '', pattern: '', purpose: 'filter', priority: 0 });
+                const filteredRules = computed(() => {
+                    let result = rules.value;
+                    if (ruleFilter.value !== 'all') result = result.filter(r => (r.purpose || 'filter') === ruleFilter.value);
+                    if (searchQuery.value) {
+                        const q = searchQuery.value.toLowerCase();
+                        result = result.filter(r => r.name.toLowerCase().includes(q) || (r.pattern && r.pattern.toLowerCase().includes(q)));
                     }
+                    return result;
                 });
-                
-                const versionDialog = reactive({
-                    visible: false,
-                    ruleId: null,
-                    versions: []
-                });
-                
                 const loadRules = async () => {
-                    loadingRules.value = true;
+                    try { const res = await fetch(API_BASE + '/api/rules'); rules.value = await res.json(); } catch (e) { ElementPlus.ElMessage.error('加载规则失败'); }
+                };
+                const getSmartResultBadgeClass = () => {
+                    if (!smartResult.value) return 'none';
+                    const hasMatched = smartResult.value.matched_rules?.length > 0;
+                    const hasGenerated = smartResult.value.generated_rules?.length > 0;
+                    if (!hasMatched && !hasGenerated) return 'none';
+                    const firstMatch = smartResult.value.matched_rules?.[0];
+                    const firstGen = smartResult.value.generated_rules?.[0];
+                    const purpose = firstMatch?.purpose || firstGen?.purpose || 'filter';
+                    return purpose === 'select' ? 'select' : 'filter';
+                };
+                const getSmartResultBadgeText = () => {
+                    if (!smartResult.value) return '';
+                    const hasMatched = smartResult.value.matched_rules?.length > 0;
+                    const hasGenerated = smartResult.value.generated_rules?.length > 0;
+                    if (!hasMatched && !hasGenerated) return '✓ 未命中任何规则';
+                    const matchCount = (smartResult.value.matched_rules?.length || 0) + (smartResult.value.generated_rules?.length || 0);
+                    const firstMatch = smartResult.value.matched_rules?.[0];
+                    const firstGen = smartResult.value.generated_rules?.[0];
+                    const purpose = firstMatch?.purpose || firstGen?.purpose || 'filter';
+                    return purpose === 'select' ? '✓ 命中 ' + matchCount + ' 条保留规则' : '✕ 命中 ' + matchCount + ' 条过滤规则';
+                };
+                const doSmartMatch = async () => {
+                    if (!smartQuery.value.trim()) return;
+                    smartLoading.value = true; smartResult.value = null;
                     try {
-                        const res = await fetch('/api/rules');
-                        rules.value = await res.json();
-                    } catch (e) {
-                        ElementPlus.ElMessage.error('加载规则失败');
-                    }
-                    loadingRules.value = false;
+                        const res = await fetch(API_BASE + '/api/smart-match', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: smartQuery.value }) });
+                        const data = await res.json();
+                        if (data.error) { ElementPlus.ElMessage.error('匹配失败: ' + data.error); return; }
+                        smartResult.value = data;
+                        expandedSteps.step1 = true; expandedSteps.step2 = true; expandedSteps.step3 = true; expandedSteps.step4 = true;
+                    } catch (e) { ElementPlus.ElMessage.error('请求失败: ' + e.message); } finally { smartLoading.value = false; }
                 };
-                
-                const loadStats = async () => {
+                const saveSuggestedRule = async (rule, idx) => {
+                    rule.saving = true;
                     try {
-                        const [sysRes, rulesRes] = await Promise.all([
-                            fetch('/api/stats'),
-                            fetch('/api/rules/stats')
-                        ]);
-                        const sysStats = await sysRes.json();
-                        const rulesStats = await rulesRes.json();
-                        stats.value = { ...sysStats, rules: rulesStats };
-                    } catch (e) {
-                        console.error('加载统计失败', e);
-                    }
+                        await fetch(API_BASE + '/api/smart-match/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules: [rule] }) });
+                        ElementPlus.ElMessage.success('规则 "' + rule.name + '" 已保存');
+                        smartResult.value.suggest_save.splice(idx, 1);
+                        loadRules();
+                    } catch (e) { ElementPlus.ElMessage.error('保存失败'); } finally { rule.saving = false; }
                 };
-                
-                const testFilter = async (useLlm) => {
-                    if (!testText.value.trim()) {
-                        ElementPlus.ElMessage.warning('请输入文本');
-                        return;
-                    }
-                    testing.value = true;
+                const ignoreSuggestedRule = (idx) => { smartResult.value.suggest_save.splice(idx, 1); };
+                const saveAllSuggested = async () => {
+                    if (!smartResult.value?.suggest_save?.length) return;
+                    savingRules.value = true;
                     try {
-                        const res = await fetch('/api/filter', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ text: testText.value, use_llm: useLlm })
-                        });
-                        testResult.value = await res.json();
-                    } catch (e) {
-                        ElementPlus.ElMessage.error('测试失败');
-                    }
-                    testing.value = false;
+                        await fetch(API_BASE + '/api/smart-match/save', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ rules: smartResult.value.suggest_save }) });
+                        ElementPlus.ElMessage.success('已保存 ' + smartResult.value.suggest_save.length + ' 条规则');
+                        smartResult.value.suggest_save = [];
+                        loadRules();
+                    } catch (e) { ElementPlus.ElMessage.error('保存失败'); } finally { savingRules.value = false; }
                 };
-                
-                const getResultClass = (result) => {
-                    if (result.is_spam && result.confidence >= 0.7) return 'result-spam';
-                    if (result.is_spam) return 'result-suspicious';
-                    return 'result-clean';
+                const doBatchTest = async () => {
+                    const lines = batchContent.value.split('\n').filter(l => l.trim());
+                    if (!lines.length) { ElementPlus.ElMessage.warning('请输入测试内容'); return; }
+                    batchLoading.value = true; batchResults.value = [];
+                    try {
+                        const res = await fetch(API_BASE + '/api/batch-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: lines }) });
+                        batchResults.value = await res.json();
+                    } catch (e) { ElementPlus.ElMessage.error('测试失败: ' + e.message); } finally { batchLoading.value = false; }
                 };
-                
-                const showAddDialog = () => {
-                    ruleDialog.isEdit = false;
-                    ruleDialog.editId = null;
-                    ruleDialog.form = {
-                        name: '', 
-                        type: 'keyword', 
-                        content: '',
-                        category: null, 
-                        priority: 50, 
-                        enabled: true,
-                        description: ''
-                    };
-                    ruleDialog.visible = true;
-                };
-                
-                const editRule = (rule) => {
-                    ruleDialog.isEdit = true;
-                    ruleDialog.editId = rule.id;
-                    ruleDialog.form = { ...rule };
-                    ruleDialog.visible = true;
-                };
-                
+                const showAddRuleDialog = () => { editingRule.value = null; ruleForm.value = { name: '', pattern: '', purpose: 'filter', priority: 0 }; ruleDialogVisible.value = true; };
+                const editRule = (rule) => { editingRule.value = rule; ruleForm.value = { ...rule }; ruleDialogVisible.value = true; };
                 const saveRule = async () => {
+                    if (!ruleForm.value.name || !ruleForm.value.pattern) { ElementPlus.ElMessage.warning('请填写规则名称和匹配模式'); return; }
                     try {
-                        const url = ruleDialog.isEdit ? `/api/rules/${ruleDialog.editId}` : '/api/rules';
-                        const method = ruleDialog.isEdit ? 'PUT' : 'POST';
-                        const response = await fetch(url, {
-                            method,
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify(ruleDialog.form)
-                        });
-                        
-                        if (!response.ok) {
-                            const errorData = await response.json().catch(() => ({}));
-                            const errorMsg = errorData.detail || `HTTP ${response.status}`;
-                            throw new Error(errorMsg);
-                        }
-                        
-                        ruleDialog.visible = false;
-                        loadRules();
+                        const url = editingRule.value ? API_BASE + '/api/rules/' + editingRule.value.id : API_BASE + '/api/rules';
+                        const method = editingRule.value ? 'PUT' : 'POST';
+                        await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ruleForm.value) });
                         ElementPlus.ElMessage.success('保存成功');
-                    } catch (e) {
-                        console.error('保存规则失败:', e);
-                        ElementPlus.ElMessage.error('保存失败: ' + e.message);
-                    }
-                };
-                
-                const toggleRule = async (rule) => {
-                    await fetch(`/api/rules/${rule.id}/toggle`, { method: 'PUT' });
-                };
-                
-                const deleteRule = async (rule) => {
-                    try {
-                        await ElementPlus.ElMessageBox.confirm('确定删除此规则？', '警告', { type: 'warning' });
-                        await fetch(`/api/rules/${rule.id}`, { method: 'DELETE' });
+                        ruleDialogVisible.value = false;
                         loadRules();
-                        ElementPlus.ElMessage.success('删除成功');
+                    } catch (e) { ElementPlus.ElMessage.error('保存失败'); }
+                };
+                const deleteRule = async (id) => {
+                    try {
+                        await ElementPlus.ElMessageBox.confirm('确定要删除这条规则吗？', '删除确认', { confirmButtonText: '删除', cancelButtonText: '取消', type: 'warning' });
+                        await fetch(API_BASE + '/api/rules/' + id, { method: 'DELETE' });
+                        ElementPlus.ElMessage.success('已删除');
+                        loadRules();
                     } catch (e) {}
                 };
-                
-                const showVersions = async (rule) => {
-                    versionDialog.ruleId = rule.id;
-                    const res = await fetch(`/api/rules/${rule.id}/versions`);
-                    versionDialog.versions = await res.json();
-                    versionDialog.visible = true;
-                };
-                
-                const rollbackVersion = async (version) => {
-                    await fetch(`/api/rules/${versionDialog.ruleId}/rollback/${version.version}`, { method: 'POST' });
-                    versionDialog.visible = false;
-                    loadRules();
-                    ElementPlus.ElMessage.success('回滚成功');
-                };
-                
-                const exportRules = async () => {
-                    const res = await fetch('/api/rules/export');
-                    const data = await res.json();
-                    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'rules_export.json';
-                    a.click();
-                };
-                
-                const getContentPlaceholder = (type) => {
-                    if (type === 'keyword') return '["关键词1", "关键词2", ...]';
-                    if (type === 'regex') return '["正则表达式1", "正则表达式2", ...]';
-                    return '{"mode": "any", "keywords": [...], "regex": [...]}';
-                };
-                
-                onMounted(() => {
-                    loadRules();
-                    loadStats();
-                });
-                
-                return {
-                    rules, stats, loadingRules, testing, testText, testResult,
-                    ruleDialog, versionDialog,
-                    loadRules, testFilter, getResultClass,
-                    showAddDialog, editRule, saveRule, toggleRule, deleteRule,
-                    showVersions, rollbackVersion, exportRules, getContentPlaceholder
-                };
+                onMounted(() => { loadRules(); });
+                return { currentPage, smartQuery, smartLoading, smartResult, savingRules, expandedSteps, batchContent, batchLoading, batchResults, rules, searchQuery, ruleFilter, filteredRules, ruleDialogVisible, editingRule, ruleForm, loadRules, getSmartResultBadgeClass, getSmartResultBadgeText, doSmartMatch, saveSuggestedRule, ignoreSuggestedRule, saveAllSuggested, doBatchTest, showAddRuleDialog, editRule, saveRule, deleteRule };
             }
         }).use(ElementPlus).mount('#app');
     </script>

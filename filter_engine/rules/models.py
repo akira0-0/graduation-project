@@ -14,6 +14,12 @@ class RuleType(str, Enum):
     KEYWORD = "keyword"      # 关键词列表
     REGEX = "regex"          # 正则表达式
     PATTERN = "pattern"      # 模式规则（组合）
+
+
+class RulePurpose(str, Enum):
+    """规则用途"""
+    FILTER = "filter"        # 过滤/删除：命中规则的数据会被删除
+    SELECT = "select"        # 筛选/保留：命中规则的数据会被保留
     
 
 class RuleCategory(str, Enum):
@@ -31,6 +37,7 @@ class RuleBase(BaseModel):
     type: RuleType = Field(..., description="规则类型")
     content: str = Field(..., description="规则内容(JSON格式)")
     category: Optional[RuleCategory] = Field(None, description="规则分类")
+    purpose: RulePurpose = Field(RulePurpose.FILTER, description="规则用途: filter(过滤删除) 或 select(筛选保留)")
     priority: int = Field(0, description="优先级(越大越先匹配)", ge=0, le=100)
     enabled: bool = Field(True, description="是否启用")
     description: Optional[str] = Field(None, description="规则描述")
@@ -47,6 +54,7 @@ class RuleUpdate(BaseModel):
     type: Optional[RuleType] = None
     content: Optional[str] = None
     category: Optional[RuleCategory] = None
+    purpose: Optional[RulePurpose] = None
     priority: Optional[int] = Field(None, ge=0, le=100)
     enabled: Optional[bool] = None
     description: Optional[str] = None
@@ -55,6 +63,7 @@ class RuleUpdate(BaseModel):
 class Rule(RuleBase):
     """完整规则模型（包含数据库字段）"""
     id: int = Field(..., description="规则ID")
+    purpose: RulePurpose = Field(RulePurpose.FILTER, description="规则用途")
     version: int = Field(1, description="版本号")
     created_at: datetime = Field(default_factory=datetime.now)
     updated_at: datetime = Field(default_factory=datetime.now)
@@ -78,6 +87,7 @@ class MatchedRule(BaseModel):
     rule_name: str
     rule_type: RuleType
     category: Optional[RuleCategory] = None
+    purpose: RulePurpose = Field(RulePurpose.FILTER, description="规则用途: filter/select")
     matched_text: str = Field(..., description="匹配到的文本片段")
     confidence: float = Field(1.0, description="匹配置信度", ge=0, le=1)
 
@@ -88,6 +98,12 @@ class RuleEngineResult(BaseModel):
     confidence: float = Field(0.0, description="置信度", ge=0, le=1)
     matched_rules: List[MatchedRule] = Field(default_factory=list)
     categories: List[str] = Field(default_factory=list, description="命中的分类")
+    
+    # 新增：区分 filter 和 select 规则
+    filter_matched: bool = Field(False, description="是否命中过滤规则（应删除）")
+    select_matched: bool = Field(False, description="是否命中筛选规则（应保留）")
+    filter_rules: List[MatchedRule] = Field(default_factory=list, description="命中的过滤规则")
+    select_rules: List[MatchedRule] = Field(default_factory=list, description="命中的筛选规则")
 
 
 class LLMResult(BaseModel):

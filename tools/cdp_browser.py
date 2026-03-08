@@ -42,6 +42,7 @@ class CDPBrowserManager:
         self.browser: Optional[Browser] = None
         self.browser_context: Optional[BrowserContext] = None
         self.debug_port: Optional[int] = None
+        self.temp_user_data_dir: Optional[str] = None  # 临时用户数据目录
         self._cleanup_registered = False
 
     def _register_cleanup_handlers(self):
@@ -193,12 +194,18 @@ class CDPBrowserManager:
         # Set user data directory (if save login state is enabled)
         user_data_dir = None
         if config.SAVE_LOGIN_STATE:
+            # 为每个进程使用不同的 user_data_dir 避免冲突
+            import time
+            pid = os.getpid()
+            timestamp = int(time.time() * 1000)
+            base_dir = f"cdp_{config.USER_DATA_DIR % config.PLATFORM}"
             user_data_dir = os.path.join(
                 os.getcwd(),
                 "browser_data",
-                f"cdp_{config.USER_DATA_DIR % config.PLATFORM}",
+                f"{base_dir}_pid{pid}_{timestamp}",
             )
             os.makedirs(user_data_dir, exist_ok=True)
+            self.temp_user_data_dir = user_data_dir  # 保存路径以便后续清理
             utils.logger.info(f"[CDPBrowserManager] User data directory: {user_data_dir}")
 
         # Launch browser
@@ -415,6 +422,17 @@ class CDPBrowserManager:
                 utils.logger.info(
                     "[CDPBrowserManager] Browser process kept running (AUTO_CLOSE_BROWSER=False)"
                 )
+            
+            # 清理临时用户数据目录
+            if self.temp_user_data_dir and os.path.exists(self.temp_user_data_dir):
+                try:
+                    import shutil
+                    shutil.rmtree(self.temp_user_data_dir, ignore_errors=True)
+                    utils.logger.info(f"[CDPBrowserManager] Cleaned up temp user data dir: {self.temp_user_data_dir}")
+                except Exception as e:
+                    utils.logger.warning(f"[CDPBrowserManager] Failed to clean temp dir: {e}")
+                finally:
+                    self.temp_user_data_dir = None
 
         except Exception as e:
             utils.logger.error(f"[CDPBrowserManager] Error during resource cleanup: {e}")

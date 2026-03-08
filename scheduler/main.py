@@ -23,13 +23,12 @@ from .importer import run_import
 logger = get_logger(__name__)
 
 
-async def run_daily_task(keywords: Optional[list] = None, parallel_all: bool = False):
+async def run_daily_task(keywords: Optional[list] = None):
     """
-    运行每日爬虫任务
+    运行每日爬虫任务（队列顺序执行模式）
     
     Args:
         keywords: 可选的关键词列表，如果不提供则自动获取热搜
-        parallel_all: 是否让三个爬虫全部并行运行
     """
     task_logger = TaskLogger('daily_crawler')
     task_logger.start()
@@ -57,14 +56,11 @@ async def run_daily_task(keywords: Optional[list] = None, parallel_all: bool = F
         logger.info("")
         logger.info("=" * 60)
         logger.info("Step 2: 运行爬虫")
-        if parallel_all:
-            logger.info("模式: 三个爬虫全部并行")
-        else:
-            logger.info("模式: 微博+小红书并行，网易新闻串行")
+        logger.info("模式: 队列顺序执行")
         logger.info("=" * 60)
         
         runner = CrawlerRunner(hot_keywords)
-        results = await runner.run_all(parallel_all=parallel_all)
+        results = await runner.run_all()
         
         # 统计结果
         for platform, platform_results in results.items():
@@ -191,17 +187,32 @@ def main():
         action='store_true',
         help='禁用网易新闻爬虫'
     )
-    run_parser.add_argument(
-        '--parallel',
-        action='store_true',
-        help='三个爬虫全部并行运行（默认网易新闻单独运行）'
-    )
     
     # convert 命令
-    subparsers.add_parser('convert', help='运行数据格式转换')
+    convert_parser = subparsers.add_parser('convert', help='运行数据格式转换')
+    convert_parser.add_argument(
+        '--all', '-a',
+        action='store_true',
+        help='转换所有日期的数据'
+    )
+    convert_parser.add_argument(
+        '--date', '-d',
+        type=str,
+        help='指定日期 (YYYY-MM-DD)'
+    )
     
     # import 命令
-    subparsers.add_parser('import', help='运行数据库导入')
+    import_parser = subparsers.add_parser('import', help='运行数据库导入')
+    import_parser.add_argument(
+        '--all', '-a',
+        action='store_true',
+        help='导入所有日期的数据'
+    )
+    import_parser.add_argument(
+        '--date', '-d',
+        type=str,
+        help='指定日期 (YYYY-MM-DD)'
+    )
     
     # test-hot 命令
     test_parser = subparsers.add_parser('test-hot', help='测试获取热搜')
@@ -228,16 +239,23 @@ def main():
         if args.keywords:
             keywords = [k.strip() for k in args.keywords.split(',')]
         
-        # 处理并行模式
-        parallel_all = getattr(args, 'parallel', False)
-        
-        asyncio.run(run_daily_task(keywords, parallel_all=parallel_all))
+        asyncio.run(run_daily_task(keywords))
         
     elif args.command == 'convert':
-        run_conversion()
+        if args.all:
+            run_conversion(all_dates=True)
+        elif args.date:
+            run_conversion(args.date)
+        else:
+            run_conversion()
         
     elif args.command == 'import':
-        run_import()
+        if args.all:
+            run_import(all_dates=True)
+        elif args.date:
+            run_import(args.date)
+        else:
+            run_import()
         
     elif args.command == 'test-hot':
         keywords = get_weibo_hot_search(args.count)

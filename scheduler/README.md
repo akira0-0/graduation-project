@@ -33,6 +33,16 @@ scheduler\setup_scheduled_task.bat
 
 ### 3. 其他命令
 
+# 导入所有日期的数据
+uv run python -m scheduler.main import --all
+uv run python -m scheduler.main import -a
+
+# 导入指定日期
+uv run python -m scheduler.main import --date 2026-03-01
+uv run python -m scheduler.main import -d 2026-03-01
+
+# 导入今天的数据（默认）
+uv run python -m scheduler.main import
 ```bash
 # 测试获取热搜
 uv run python -m scheduler.main test-hot

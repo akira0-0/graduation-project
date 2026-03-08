@@ -44,10 +44,10 @@ class CrawlerRunner:
     
     async def run_all(self, parallel_all: bool = False) -> Dict[str, List[CrawlResult]]:
         """
-        运行所有启用的爬虫
+        运行所有启用的爬虫（队列顺序执行模式）
         
         Args:
-            parallel_all: 是否让三个爬虫全部并行（默认False，网易新闻单独运行）
+            parallel_all: 保留参数但不再使用，所有爬虫按顺序执行
         
         Returns:
             各平台的爬取结果
@@ -58,53 +58,57 @@ class CrawlerRunner:
             'web': [],
         }
         
-        # 收集要并行运行的任务
-        tasks = []
-        task_names = []
+        # 构建任务队列
+        task_queue = []
         
         if cfg.ENABLE_WEIBO:
-            logger.info("=" * 60)
-            logger.info("启动微博爬虫（异步）")
-            logger.info("=" * 60)
-            tasks.append(self.run_weibo_crawler())
-            task_names.append('weibo')
+            task_queue.append(('weibo', self.run_weibo_crawler))
         
         if cfg.ENABLE_XHS:
-            logger.info("=" * 60)
-            logger.info("启动小红书爬虫（异步）")
-            logger.info("=" * 60)
-            tasks.append(self.run_xhs_crawler())
-            task_names.append('xhs')
+            task_queue.append(('xhs', self.run_xhs_crawler))
         
-        # 根据参数决定是否将网易新闻也加入并行
-        if cfg.ENABLE_WEB and parallel_all:
-            logger.info("=" * 60)
-            logger.info("启动网易新闻爬虫（异步）")
-            logger.info("=" * 60)
-            tasks.append(self.run_web_crawler())
-            task_names.append('web')
+        if cfg.ENABLE_WEB:
+            task_queue.append(('web', self.run_web_crawler))
         
-        # 并行运行爬虫
-        if tasks:
+        logger.info("=" * 60)
+        logger.info(f"队列顺序执行模式：共 {len(task_queue)} 个爬虫任务")
+        logger.info(f"执行顺序: {' -> '.join([t[0] for t in task_queue])}")
+        logger.info("=" * 60)
+        
+        # 按顺序执行每个爬虫
+        for idx, (platform_name, crawler_func) in enumerate(task_queue, 1):
+            logger.info("")
             logger.info("=" * 60)
-            logger.info(f"并行运行 {len(tasks)} 个爬虫: {', '.join(task_names)}")
+            logger.info(f"[{idx}/{len(task_queue)}] 开始运行 {platform_name} 爬虫")
             logger.info("=" * 60)
             
-            results = await asyncio.gather(*tasks, return_exceptions=True)
+            try:
+                result = await crawler_func()
+                all_results[platform_name] = result
+                
+                # 统计本次结果
+                success_count = sum(1 for r in result if r.success)
+                total_count = len(result)
+                posts_count = sum(r.posts_count for r in result)
+                comments_count = sum(r.comments_count for r in result)
+                
+                logger.info(f"[{idx}/{len(task_queue)}] {platform_name} 完成: "
+                           f"成功 {success_count}/{total_count}, "
+                           f"帖子 {posts_count}, 评论 {comments_count}")
+                
+            except Exception as e:
+                logger.error(f"[{idx}/{len(task_queue)}] {platform_name} 爬虫异常: {e}")
+                all_results[platform_name] = []
             
-            for name, result in zip(task_names, results):
-                if isinstance(result, Exception):
-                    logger.error(f"{name} 爬虫异常: {result}")
-                    all_results[name] = []
-                else:
-                    all_results[name] = result
+            # 爬虫之间间隔，避免资源冲突
+            if idx < len(task_queue):
+                logger.info(f"等待 3 秒后执行下一个爬虫...")
+                await asyncio.sleep(3)
         
-        # 如果不是全并行模式，网易新闻单独运行
-        if cfg.ENABLE_WEB and not parallel_all:
-            logger.info("=" * 60)
-            logger.info("开始运行网易新闻爬虫")
-            logger.info("=" * 60)
-            all_results['web'] = await self.run_web_crawler()
+        logger.info("")
+        logger.info("=" * 60)
+        logger.info("所有爬虫任务执行完毕")
+        logger.info("=" * 60)
         
         return all_results
     

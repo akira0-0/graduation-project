@@ -1,6 +1,6 @@
 # 数据过滤引擎 (Filter Engine)
 
-基于规则引擎和大语言模型的内容过滤系统，支持高效的关键词匹配、正则表达式过滤和 LLM 语义分析。
+基于规则引擎和大语言模型的智能内容过滤系统，支持高效的关键词匹配、正则表达式过滤和 LLM 语义分析。
 
 ## 功能特性
 
@@ -12,12 +12,36 @@
 - **协同决策引擎**: 规则引擎与 LLM 结合，置信度加权决策
 - **缓存优化**: LRU 缓存 + SimHash 相似文本去重
 
+### 🧠 智能规则匹配 (v2.2 核心功能)
+
+- **自然语言理解**: 用户用自然语言描述需求，AI 自动理解并转换为过滤规则
+- **思维链追踪 (CoT)**: 展示 AI 的推理过程（约束提取→规则匹配→缺口分析→规则生成）
+- **现有规则复用**: 自动匹配规则库中可复用的规则
+- **缺失规则生成**: 智能识别规则缺口并生成新规则
+- **规则用途区分**: 支持「过滤规则」（命中即删除）和「筛选规则」（命中即保留）
+- **规则保存建议**: 推荐有价值的新规则，用户可一键保存
+
+**示例**:
+```
+输入: "帮我找便宜的丽江民宿，别看广告"
+
+AI 输出:
+├── 思维链 (CoT)
+│   ├── Step 1: 约束提取 - 价格约束(便宜)、地点(丽江)、类别(民宿)、清洗(去广告)
+│   ├── Step 2: 规则匹配 - 🚫 ad_wechat(过滤规则) ✓
+│   ├── Step 3: 缺口分析 - 缺少"丽江"筛选规则
+│   └── Step 4: 规则生成 - ✅ 丽江相关(筛选规则)
+├── 执行计划: 先用筛选规则保留相关内容，再用过滤规则去除广告
+└── 建议保存: "丽江相关"(筛选)、"民宿关键词"(筛选) 等
+```
+
 ### 📊 管理功能
 
 - **规则 CRUD**: 创建、读取、更新、删除规则
-- **版本管理**: 规则变更历史，支持回滚
+- **批量测试**: 支持多条文本同时测试
+- **规则用途**: 区分过滤规则（🚫）和筛选规则（✅）
 - **批量导入导出**: JSON 格式规则迁移
-- **Web 管理界面**: Vue3 + Element Plus 前端
+- **Web 管理界面**: Vue3 + Element Plus 现代化前端
 
 ## 快速开始
 
@@ -69,6 +93,54 @@ for text, res in zip(texts, batch_result.results):
 # 过滤并分流
 passed, filtered = pipeline.filter_and_split(texts)
 print(f"通过: {len(passed)}, 过滤: {len(filtered)}")
+```
+
+### 🆕 动态规则选择（推荐）
+
+```python
+from filter_engine import DynamicFilterPipeline, DynamicFilterConfig
+
+# 创建动态过滤管道
+pipeline = DynamicFilterPipeline(
+    db_path="filter_engine/data/rules.db",
+    use_llm=True,
+    config=DynamicFilterConfig(
+        enable_dynamic_rules=True,      # 启用动态规则选择
+        enable_rule_generation=True,    # 启用规则自动生成
+        auto_save_generated_rules=False, # 不自动保存（需手动确认）
+    )
+)
+
+# 带查询的过滤（自动分析意图、选择规则）
+result = pipeline.filter_with_query(
+    query="过滤电商评论中的广告和刷单内容",
+    texts=["加我微信xxx优惠多多", "这个产品质量很好"],
+    context={"source": "小红书"},
+)
+
+print(f"场景: {result['intent']['scenario']}")
+print(f"选中规则: {result['selected_rules']['total_count']}条")
+print(f"过滤结果: {result['stats']}")
+
+# 如果有生成的新规则
+for rule in result['generated_rules']:
+    print(f"新规则: {rule['rule']['name']}")
+    # 手动保存
+    # pipeline.save_generated_rule(rule)
+```
+
+### 查询意图分析
+
+```python
+from filter_engine import QueryAnalyzer
+
+analyzer = QueryAnalyzer()
+
+# 自动分析查询意图
+intent = analyzer.analyze("严格过滤新闻中的敏感内容")
+print(f"场景: {intent.scenario}")      # news
+print(f"严格程度: {intent.severity}")  # strict
+print(f"关注类别: {intent.extra_categories}")  # ['sensitive']
 ```
 
 ### 使用 LLM 过滤

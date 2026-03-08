@@ -18,6 +18,20 @@ from .prompts import (
     build_batch_filter_prompt,
     build_context_filter_prompt,
 )
+from .rule_generator import RuleGenerator, GapAnalysis, GeneratedRule
+from .smart_matcher import (
+    SmartRuleMatcher,
+    SmartMatchResult,
+    ThoughtTrace,
+    MatchedRuleInfo,
+    GeneratedRuleInfo,
+    SuggestSaveRule,
+)
+from .prompts_smart import (
+    SMART_MATCH_SYSTEM,
+    SMART_MATCH_PROMPT,
+    build_smart_match_prompt,
+)
 
 __all__ = [
     # 客户端
@@ -40,4 +54,18 @@ __all__ = [
     "build_filter_prompt",
     "build_batch_filter_prompt",
     "build_context_filter_prompt",
+    # 规则生成器
+    "RuleGenerator",
+    "GapAnalysis",
+    "GeneratedRule",
+    # 智能匹配器
+    "SmartRuleMatcher",
+    "SmartMatchResult",
+    "ThoughtTrace",
+    "MatchedRuleInfo",
+    "GeneratedRuleInfo",
+    "SuggestSaveRule",
+    "SMART_MATCH_SYSTEM",
+    "SMART_MATCH_PROMPT",
+    "build_smart_match_prompt",
 ]

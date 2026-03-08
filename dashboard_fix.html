@@ -1,0 +1,36 @@
+<!-- 这是关键词渲染部分的修复代码片段 -->
+<td class="max-w-xs">
+    ${(() => {
+        // 从 tags JSONB 字段提取关键词
+        const tags = post.tags;
+        
+        // tags 可能是数组、对象或 null
+        if (!tags) {
+            return '<span class="text-gray-400 text-sm">无标签</span>';
+        }
+        
+        // 如果 tags 是数组
+        if (Array.isArray(tags)) {
+            if (tags.length === 0) {
+                return '<span class="text-gray-400 text-sm">无标签</span>';
+            }
+            // 显示所有标签
+            return tags.map(tag => 
+                `<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs inline-block mr-1 mb-1" title="${(tag || '').toString().replace(/"/g, '&quot;')}">${tag}</span>`
+            ).join('');
+        }
+        
+        // 如果 tags 是对象（可能有 keywords 或其他属性）
+        if (typeof tags === 'object') {
+            // 尝试获取 keywords 属性
+            const keywords = tags.keywords || tags.tags || Object.values(tags);
+            if (Array.isArray(keywords) && keywords.length > 0) {
+                return keywords.map(tag => 
+                    `<span class="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs inline-block mr-1 mb-1">${tag}</span>`
+                ).join('');
+            }
+        }
+        
+        return '<span class="text-gray-400 text-sm">无标签</span>';
+    })()}
+</td>

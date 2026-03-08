@@ -7,8 +7,10 @@ CREATE TABLE IF NOT EXISTS rules (
     type TEXT NOT NULL,              -- keyword, regex, pattern
     content TEXT NOT NULL,           -- JSON格式规则内容
     category TEXT,                   -- spam, ad, sensitive, profanity
+    purpose TEXT DEFAULT 'filter',   -- filter(过滤/删除), select(筛选/保留)
     priority INTEGER DEFAULT 0,
     enabled INTEGER DEFAULT 1,
+    description TEXT,
     version INTEGER DEFAULT 1,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -27,10 +29,11 @@ CREATE TABLE IF NOT EXISTS rule_versions (
 -- 索引
 CREATE INDEX IF NOT EXISTS idx_rules_enabled ON rules(enabled);
 CREATE INDEX IF NOT EXISTS idx_rules_category ON rules(category);
+CREATE INDEX IF NOT EXISTS idx_rules_purpose ON rules(purpose);
 CREATE INDEX IF NOT EXISTS idx_versions_rule_id ON rule_versions(rule_id);
 
--- 默认规则
-INSERT OR IGNORE INTO rules (name, type, content, category, priority) VALUES
-('spam_keywords', 'keyword', '["加微信", "免费领取", "点击链接", "限时优惠", "扫码关注", "私信我"]', 'spam', 10),
-('ad_wechat', 'regex', '["[Vv]信", "[Ww][Xx]", "微信号?[:：]?\\s*\\w+", "加我\\s*\\d+"]', 'ad', 15),
-('sensitive_words', 'keyword', '["敏感词示例1", "敏感词示例2"]', 'sensitive', 20);
+-- 默认规则（都是过滤规则）
+INSERT OR IGNORE INTO rules (name, type, content, category, purpose, priority) VALUES
+('spam_keywords', 'keyword', '["加微信", "免费领取", "点击链接", "限时优惠", "扫码关注", "私信我"]', 'spam', 'filter', 10),
+('ad_wechat', 'regex', '["[Vv]信", "[Ww][Xx]", "微信号?[:：]?\\s*\\w+", "加我\\s*\\d+"]', 'ad', 'filter', 15),
+('sensitive_words', 'keyword', '["敏感词示例1", "敏感词示例2"]', 'sensitive', 'filter', 20);

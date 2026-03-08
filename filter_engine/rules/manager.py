@@ -85,7 +85,7 @@ class RuleManager:
                     CREATE INDEX IF NOT EXISTS idx_rules_category ON rules(category);
                 """)
             
-            # 数据库迁移：确保 description 列存在
+            # 数据库迁移：确保新列存在
             self._migrate_db(conn)
     
     def _migrate_db(self, conn):
@@ -100,6 +100,15 @@ class RuleManager:
                 conn.execute("ALTER TABLE rules ADD COLUMN description TEXT")
             except sqlite3.OperationalError:
                 pass  # 列已存在
+        
+        # 添加缺失的 purpose 列（默认为 filter）
+        if 'purpose' not in columns:
+            try:
+                conn.execute("ALTER TABLE rules ADD COLUMN purpose TEXT DEFAULT 'filter'")
+                # 更新所有现有规则的 purpose 为 filter
+                conn.execute("UPDATE rules SET purpose = 'filter' WHERE purpose IS NULL")
+            except sqlite3.OperationalError:
+                pass  # 列已存在
     
     def _row_to_rule(self, row) -> Rule:
         """将数据库行转换为Rule对象"""
@@ -111,6 +120,7 @@ class RuleManager:
             type=row_dict['type'],
             content=row_dict['content'],
             category=row_dict.get('category'),
+            purpose=row_dict.get('purpose', 'filter'),
             priority=row_dict['priority'],
             enabled=bool(row_dict['enabled']),
             description=row_dict.get('description'),
@@ -126,14 +136,15 @@ class RuleManager:
         with self._get_conn() as conn:
             cursor = conn.execute(
                 """
-                INSERT INTO rules (name, type, content, category, priority, enabled, description)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO rules (name, type, content, category, purpose, priority, enabled, description)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     data.name,
                     data.type.value if hasattr(data.type, 'value') else data.type,
                     data.content,
                     data.category.value if data.category and hasattr(data.category, 'value') else data.category,
+                    data.purpose.value if hasattr(data.purpose, 'value') else (data.purpose or 'filter'),
                     data.priority,
                     1 if data.enabled else 0,
                     data.description,
@@ -168,10 +179,20 @@ class RuleManager:
         enabled_only: bool = False,
         category: Optional[str] = None,
         rule_type: Optional[str] = None,
+        purpose: Optional[str] = None,
         limit: int = 1000,
         offset: int = 0,
     ) -> List[Rule]:
-        """获取规则列表"""
+        """获取规则列表
+        
+        Args:
+            enabled_only: 只返回启用的规则
+            category: 按分类筛选
+            rule_type: 按类型筛选
+            purpose: 按用途筛选 (filter/select)
+            limit: 返回数量限制
+            offset: 偏移量
+        """
         query = "SELECT * FROM rules WHERE 1=1"
         params = []
         
@@ -183,6 +204,9 @@ class RuleManager:
         if rule_type:
             query += " AND type = ?"
             params.append(rule_type)
+        if purpose:
+            query += " AND purpose = ?"
+            params.append(purpose)
         
         query += " ORDER BY priority DESC, id ASC LIMIT ? OFFSET ?"
         params.extend([limit, offset])

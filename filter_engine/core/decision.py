@@ -84,13 +84,32 @@ class DecisionEngine:
         }
     
     def _decide_rule_only(self, rule_result: RuleEngineResult) -> Dict[str, Any]:
-        """只有规则结果时的决策"""
-        is_spam = rule_result.is_matched and rule_result.confidence >= self.spam_threshold
+        """只有规则结果时的决策
+        
+        根据规则的 purpose 区分：
+        - filter 规则命中 → is_spam = True（需要过滤掉）
+        - select 规则命中 → is_spam = False（需要保留）
+        """
+        # 使用 filter_matched 判断是否命中过滤规则
+        is_filter_matched = getattr(rule_result, 'filter_matched', rule_result.is_matched)
+        is_select_matched = getattr(rule_result, 'select_matched', False)
+        
+        # 只有 filter 规则命中才判定为垃圾
+        is_spam = is_filter_matched and rule_result.confidence >= self.spam_threshold
+        
+        # 获取匹配规则列表
+        filter_rules = getattr(rule_result, 'filter_rules', [])
+        select_rules = getattr(rule_result, 'select_rules', [])
+        all_matched = [m.rule_name for m in rule_result.matched_rules]
         
         return {
             "is_spam": is_spam,
             "confidence": rule_result.confidence,
-            "matched_rules": [m.rule_name for m in rule_result.matched_rules],
+            "matched_rules": all_matched,
+            "filter_matched_rules": [m.rule_name for m in filter_rules],
+            "select_matched_rules": [m.rule_name for m in select_rules],
+            "is_filter_matched": is_filter_matched,
+            "is_select_matched": is_select_matched,
             "category": rule_result.categories[0] if rule_result.categories else None,
             "source": "rule",
         }
@@ -117,18 +136,24 @@ class DecisionEngine:
         规则与LLM结合决策
         
         策略:
-        1. 规则高置信(>=0.9) → 以规则为准
+        1. filter规则高置信(>=0.9) → 以规则为准，判定为垃圾
         2. 两者一致 → 提高置信度
         3. 两者冲突 → 加权决策，偏向LLM
+        
+        注意：只有 filter 规则命中才可能判定为垃圾
         """
-        rule_is_spam = rule_result.is_matched
+        # 使用 filter_matched 判断规则是否检测到垃圾
+        is_filter_matched = getattr(rule_result, 'filter_matched', rule_result.is_matched)
+        is_select_matched = getattr(rule_result, 'select_matched', False)
+        
+        rule_is_spam = is_filter_matched  # 只有 filter 规则命中才算垃圾
         llm_is_spam = llm_result.is_spam
         
-        rule_conf = rule_result.confidence if rule_result.is_matched else 0.0
+        rule_conf = rule_result.confidence if is_filter_matched else 0.0
         llm_conf = llm_result.confidence
         
-        # 规则高置信命中，直接采用
-        if rule_result.is_matched and rule_conf >= 0.9:
+        # 过滤规则高置信命中，直接采用
+        if is_filter_matched and rule_conf >= 0.9:
             return {
                 "is_spam": True,
                 "confidence": rule_conf,

@@ -164,7 +164,7 @@ class RuleEngine:
             text: 待过滤文本
             
         Returns:
-            RuleEngineResult
+            RuleEngineResult: 包含 filter_matched 和 select_matched 区分两种规则
         """
         if not text:
             return RuleEngineResult()
@@ -180,11 +180,17 @@ class RuleEngine:
             if rule_id not in matched_rule_ids:
                 compiled = self._compiled_rules.get(rule_id)
                 if compiled:
+                    # 获取规则的 purpose
+                    purpose = getattr(compiled.rule, 'purpose', 'filter')
+                    if hasattr(purpose, 'value'):
+                        purpose = purpose.value
+                    
                     matched_rules.append(MatchedRule(
                         rule_id=rule_id,
                         rule_name=compiled.rule.name,
                         rule_type=compiled.rule.type,
                         category=compiled.rule.category,
+                        purpose=purpose,
                         matched_text=matched_text,
                         confidence=1.0,
                     ))
@@ -198,11 +204,16 @@ class RuleEngine:
             if rule_id not in matched_rule_ids:
                 compiled = self._compiled_rules.get(rule_id)
                 if compiled:
+                    purpose = getattr(compiled.rule, 'purpose', 'filter')
+                    if hasattr(purpose, 'value'):
+                        purpose = purpose.value
+                    
                     matched_rules.append(MatchedRule(
                         rule_id=rule_id,
                         rule_name=compiled.rule.name,
                         rule_type=compiled.rule.type,
                         category=compiled.rule.category,
+                        purpose=purpose,
                         matched_text=matched_text,
                         confidence=confidence,
                     ))
@@ -215,24 +226,36 @@ class RuleEngine:
         for rule_id, matched_text, confidence in pattern_matches:
             compiled = self._compiled_rules.get(rule_id)
             if compiled:
+                purpose = getattr(compiled.rule, 'purpose', 'filter')
+                if hasattr(purpose, 'value'):
+                    purpose = purpose.value
+                
                 matched_rules.append(MatchedRule(
                     rule_id=rule_id,
                     rule_name=compiled.rule.name,
                     rule_type=compiled.rule.type,
                     category=compiled.rule.category,
+                    purpose=purpose,
                     matched_text=matched_text,
                     confidence=confidence,
                 ))
                 if compiled.rule.category:
                     categories.add(compiled.rule.category)
         
-        # 计算综合置信度
+        # 区分 filter 和 select 规则
+        filter_rules = [r for r in matched_rules if r.purpose == 'filter']
+        select_rules = [r for r in matched_rules if r.purpose == 'select']
+        
+        filter_matched = len(filter_rules) > 0
+        select_matched = len(select_rules) > 0
+        
+        # 计算综合置信度（只针对 filter 规则）
         is_matched = len(matched_rules) > 0
         confidence = 0.0
-        if is_matched:
-            # 取最高置信度，并根据匹配数量加权
-            max_conf = max(m.confidence for m in matched_rules)
-            match_bonus = min(0.1 * (len(matched_rules) - 1), 0.2)  # 多规则命中加成
+        if filter_matched:
+            # 只计算 filter 规则的置信度
+            max_conf = max(m.confidence for m in filter_rules)
+            match_bonus = min(0.1 * (len(filter_rules) - 1), 0.2)
             confidence = min(max_conf + match_bonus, 1.0)
         
         return RuleEngineResult(
@@ -240,6 +263,10 @@ class RuleEngine:
             confidence=confidence,
             matched_rules=matched_rules,
             categories=list(categories),
+            filter_matched=filter_matched,
+            select_matched=select_matched,
+            filter_rules=filter_rules,
+            select_rules=select_rules,
         )
     
     def _match_with_ac(self, text_lower: str) -> List[Tuple[int, str]]:

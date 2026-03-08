@@ -136,26 +136,39 @@ def _merge_and_save(filepath: str, new_data: List[Dict]):
         logger.debug(f"保存数据到 {filepath}: 新增 {len(new_items)} 条")
 
 
-def run_conversion(target_date: str = None):
+def run_conversion(target_date: str = None, all_dates: bool = False):
     """
     运行所有数据转换
     
     Args:
         target_date: 目标日期，格式 YYYY-MM-DD，默认为今天
+        all_dates: 是否转换所有日期的数据
     """
     logger.info("=" * 60)
     logger.info("开始数据格式转换")
-    if target_date:
-        logger.info(f"目标日期: {target_date}")
-    logger.info("=" * 60)
     
     total_posts = 0
     total_comments = 0
     
-    # 转换小红书数据
-    posts, comments = convert_xhs_data(target_date)
-    total_posts += posts
-    total_comments += comments
+    if all_dates:
+        # 扫描所有日期的数据
+        logger.info("模式: 转换所有日期的数据")
+        dates = _scan_all_dates()
+        logger.info(f"发现 {len(dates)} 个日期的数据: {', '.join(sorted(dates))}")
+        
+        for date in sorted(dates):
+            logger.info(f"正在转换 {date} 的数据...")
+            posts, comments = convert_xhs_data(date)
+            total_posts += posts
+            total_comments += comments
+    else:
+        if target_date:
+            logger.info(f"目标日期: {target_date}")
+        
+        # 转换小红书数据
+        posts, comments = convert_xhs_data(target_date)
+        total_posts += posts
+        total_comments += comments
     
     # 微博和网易已经是统一格式，无需转换
     logger.info("微博数据已是统一格式，无需转换")
@@ -168,14 +181,45 @@ def run_conversion(target_date: str = None):
     return total_posts, total_comments
 
 
+def _scan_all_dates() -> List[str]:
+    """
+    扫描数据目录中所有存在的日期
+    
+    Returns:
+        日期列表，格式 YYYY-MM-DD
+    """
+    import re
+    dates = set()
+    
+    # 扫描小红书数据目录
+    source_dir = os.path.join(cfg.DATA_DIR, 'xhs', 'json')
+    if os.path.exists(source_dir):
+        for filename in os.listdir(source_dir):
+            if filename.endswith('.json'):
+                # 从文件名中提取日期 (格式: xxx_YYYY-MM-DD.json)
+                match = re.search(r'(\d{4}-\d{2}-\d{2})', filename)
+                if match:
+                    dates.add(match.group(1))
+    
+    return list(dates)
+
+
 if __name__ == "__main__":
     import sys
+    import argparse
     
-    # 支持命令行参数指定日期
-    # 用法: python -m scheduler.converter 2026-03-01
-    target_date = sys.argv[1] if len(sys.argv) > 1 else None
+    parser = argparse.ArgumentParser(description='数据格式转换器')
+    parser.add_argument('date', nargs='?', help='指定日期 (YYYY-MM-DD)，不指定则转换今天')
+    parser.add_argument('--all', '-a', action='store_true', help='转换所有日期的数据')
     
-    if target_date:
-        print(f"📅 转换指定日期数据: {target_date}")
+    args = parser.parse_args()
     
-    run_conversion(target_date)
+    if args.all:
+        print("📅 转换所有日期的数据")
+        run_conversion(all_dates=True)
+    elif args.date:
+        print(f"📅 转换指定日期数据: {args.date}")
+        run_conversion(args.date)
+    else:
+        print("📅 转换今天的数据")
+        run_conversion()

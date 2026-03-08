@@ -54,12 +54,14 @@ class XiaoHongShuCrawler(AbstractCrawler):
     xhs_client: XiaoHongShuClient
     browser_context: BrowserContext
     cdp_manager: Optional[CDPBrowserManager]
+    temp_user_data_dir: Optional[str]  # 临时用户数据目录，关闭时需要清理
 
     def __init__(self) -> None:
         self.index_url = "https://www.xiaohongshu.com"
         # self.user_agent = utils.get_user_agent()
         self.user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
         self.cdp_manager = None
+        self.temp_user_data_dir = None  # 初始化为 None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
 
     async def start(self) -> None:
@@ -393,7 +395,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
         if config.SAVE_LOGIN_STATE:
             # feat issue #14
             # we will save login state to avoid login every time
-            user_data_dir = os.path.join(os.getcwd(), "browser_data", config.USER_DATA_DIR % config.PLATFORM)  # type: ignore
+            # 为每个进程使用不同的 user_data_dir 避免冲突
+            import os
+            import time
+            pid = os.getpid()
+            timestamp = int(time.time() * 1000)
+            base_dir = config.USER_DATA_DIR % config.PLATFORM  # type: ignore
+            user_data_dir = os.path.join(os.getcwd(), "browser_data", f"{base_dir}_pid{pid}_{timestamp}")
+            self.temp_user_data_dir = user_data_dir  # 保存路径以便后续清理
+            utils.logger.info(f"[XiaoHongShuCrawler.launch_browser] User data dir: {user_data_dir}")
             browser_context = await chromium.launch_persistent_context(
                 user_data_dir=user_data_dir,
                 accept_downloads=True,
@@ -449,6 +459,15 @@ class XiaoHongShuCrawler(AbstractCrawler):
         else:
             await self.browser_context.close()
         utils.logger.info("[XiaoHongShuCrawler.close] Browser context closed ...")
+        
+        # 清理临时用户数据目录
+        if self.temp_user_data_dir and os.path.exists(self.temp_user_data_dir):
+            try:
+                import shutil
+                shutil.rmtree(self.temp_user_data_dir, ignore_errors=True)
+                utils.logger.info(f"[XiaoHongShuCrawler.close] Cleaned up temp user data dir: {self.temp_user_data_dir}")
+            except Exception as e:
+                utils.logger.warning(f"[XiaoHongShuCrawler.close] Failed to clean temp dir: {e}")
 
     async def get_notice_media(self, note_detail: Dict):
         if not config.ENABLE_GET_MEIDAS:
