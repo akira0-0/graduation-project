@@ -24,7 +24,7 @@ from .smart_matcher import (
     SmartMatchResult,
     ThoughtTrace,
     MatchedRuleInfo,
-    GeneratedRuleInfo,
+    GapRule,
     SuggestSaveRule,
 )
 from .prompts_smart import (
@@ -63,7 +63,7 @@ __all__ = [
     "SmartMatchResult",
     "ThoughtTrace",
     "MatchedRuleInfo",
-    "GeneratedRuleInfo",
+    "GapRule,",
     "SuggestSaveRule",
     "SMART_MATCH_SYSTEM",
     "SMART_MATCH_PROMPT",

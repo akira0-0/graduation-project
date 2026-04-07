@@ -92,6 +92,37 @@
         .suggested-rule-reason { font-size: 13px; color: var(--text-3); margin-bottom: 12px; display: flex; align-items: flex-start; gap: 6px; }
         .suggested-rule-actions { display: flex; gap: 8px; }
         .suggested-rule-actions .btn { flex: 1; }
+        /* 场景徽章 */
+        .scene-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+        .scene-badge.normal    { background: linear-gradient(135deg,#f3f4f6,#e5e7eb); color: #374151; }
+        .scene-badge.ecommerce { background: linear-gradient(135deg,#fff7ed,#fed7aa); color: #c2410c; }
+        .scene-badge.news      { background: linear-gradient(135deg,#eff6ff,#bfdbfe); color: #1d4ed8; }
+        .scene-badge.social    { background: linear-gradient(135deg,#fdf4ff,#e9d5ff); color: #7e22ce; }
+        .scene-badge.finance   { background: linear-gradient(135deg,#fefce8,#fef08a); color: #854d0e; }
+        .scene-badge.medical   { background: linear-gradient(135deg,#ecfdf5,#a7f3d0); color: #065f46; }
+        .scene-badge.education { background: linear-gradient(135deg,#fef2f2,#fecaca); color: #991b1b; }
+        /* 执行计划 */
+        .exec-plan { margin-top: 16px; border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+        .exec-plan-title { padding: 12px 16px; background: var(--bg-3); font-size: 13px; font-weight: 600; color: var(--text-2); }
+        .exec-plan-layer { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--border); }
+        .exec-plan-layer-num { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; color: white; }
+        .exec-plan-layer-num.l1 { background: var(--text-4); }
+        .exec-plan-layer-num.l2 { background: var(--primary); }
+        .exec-plan-layer-num.l3 { background: var(--warning); }
+        .exec-plan-layer-text { font-size: 13px; color: var(--text-2); line-height: 1.6; }
+        /* 缺口规则 */
+        .gap-rule-card { background: linear-gradient(135deg,#fefce8,#fef9c3); border: 1px solid #fde047; border-radius: 12px; padding: 14px 16px; margin-bottom: 10px; position: relative; }
+        .gap-rule-card::before { content: ""; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: linear-gradient(to bottom,#eab308,#ca8a04); border-radius: 4px 0 0 4px; }
+        .gap-rule-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+        .gap-rule-name { font-size: 14px; font-weight: 600; color: var(--text-1); }
+        .gap-rule-badges { display: flex; gap: 6px; }
+        .gap-rule-keywords { font-family: Monaco, Menlo, monospace; font-size: 12px; background: rgba(255,255,255,0.7); padding: 8px 10px; border-radius: 6px; color: var(--text-2); word-break: break-all; margin-bottom: 8px; }
+        .gap-rule-desc { font-size: 12px; color: var(--text-3); }
+        /* LLM 语义过滤提示 */
+        .llm-alert { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; background: linear-gradient(135deg,#fffbeb,#fef3c7); border: 1px solid #fde68a; border-radius: 12px; margin-top: 16px; }
+        .llm-alert-icon { font-size: 20px; flex-shrink: 0; }
+        .llm-alert-text { font-size: 13px; color: #92400e; line-height: 1.6; }
+        .llm-alert-title { font-weight: 700; margin-bottom: 4px; }
         .batch-stats { display: flex; gap: 24px; padding: 16px 20px; background: var(--bg-2); border-radius: 10px; margin-bottom: 20px; }
         .batch-stat-item { display: flex; align-items: center; gap: 12px; }
         .batch-stat-icon { width: 44px; height: 44px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 20px; }
@@ -119,13 +150,18 @@
         .rules-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 16px; }
         .rule-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: all 0.2s; }
         .rule-card:hover { border-color: var(--primary-light); box-shadow: 0 8px 24px rgba(99,102,241,0.12); transform: translateY(-2px); }
-        .rule-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 14px; }
+        .rule-card-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 10px; }
         .rule-card-name { font-size: 16px; font-weight: 600; color: var(--text-1); }
+        .rule-card-badges { display: flex; gap: 6px; flex-shrink: 0; }
+        .rule-card-type { padding: 3px 8px; background: var(--bg-3); border-radius: 6px; font-size: 11px; font-weight: 500; color: var(--text-3); }
         .rule-card-purpose { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
         .rule-card-purpose.filter { background: #fef2f2; color: #dc2626; }
         .rule-card-purpose.select { background: #eff6ff; color: #2563eb; }
+        .rule-card-desc { font-size: 13px; color: var(--text-3); margin-bottom: 12px; padding: 8px 12px; background: var(--bg-2); border-radius: 8px; border-left: 3px solid var(--primary-light); }
         .rule-card-pattern { font-family: Monaco, Menlo, monospace; font-size: 13px; background: var(--bg-2); padding: 14px; border-radius: 10px; color: var(--text-2); word-break: break-all; max-height: 100px; overflow-y: auto; margin-bottom: 16px; }
         .rule-card-footer { display: flex; align-items: center; justify-content: space-between; }
+        .rule-card-meta { display: flex; align-items: center; gap: 12px; }
+        .rule-card-category { font-size: 12px; color: var(--text-4); background: var(--bg-3); padding: 4px 8px; border-radius: 6px; }
         .rule-card-priority { font-size: 12px; color: var(--text-4); }
         .rule-card-actions { display: flex; gap: 8px; }
         .btn-icon { width: 36px; height: 36px; padding: 0; border-radius: 8px; background: var(--bg-2); color: var(--text-3); border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -152,8 +188,45 @@
         .empty-state .icon { font-size: 64px; margin-bottom: 20px; opacity: 0.6; }
         .empty-state .title { font-size: 18px; font-weight: 600; color: var(--text-2); margin-bottom: 8px; }
         .empty-state .desc { font-size: 14px; color: var(--text-4); }
-        .spinner { width: 20px; height: 20px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        /* 流水线相关 */
+        .pipeline-layout { display: grid; grid-template-columns: 1fr 1.4fr; gap: 24px; }
+        @media (max-width: 1100px) { .pipeline-layout { grid-template-columns: 1fr; } }
+        .layer-block { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 16px; }
+        .layer-block-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; font-size: 14px; font-weight: 600; }
+        .layer-block-header.l1 { background: linear-gradient(90deg,#f1f5f9,#e2e8f0); color: #475569; }
+        .layer-block-header.l2 { background: linear-gradient(90deg,#eef2ff,#e0e7ff); color: #3730a3; }
+        .layer-block-header.l3 { background: linear-gradient(90deg,#fffbeb,#fef3c7); color: #92400e; }
+        .layer-badge { width: 28px; height: 28px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: white; flex-shrink: 0; }
+        .layer-badge.l1 { background: #64748b; }
+        .layer-badge.l2 { background: var(--primary); }
+        .layer-badge.l3 { background: var(--warning); }
+        .layer-block-body { padding: 14px 18px; }
+        .layer-stat-row { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; }
+        .layer-stat { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+        .layer-stat-dot { width: 8px; height: 8px; border-radius: 50%; }
+        .pipeline-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .pipeline-table th { padding: 10px 12px; background: var(--bg-2); color: var(--text-3); font-size: 11px; text-transform: uppercase; text-align: left; }
+        .pipeline-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+        .pipeline-table tr:last-child td { border-bottom: none; }
+        .pipeline-table tr:hover td { background: var(--bg-2); }
+        .layer-tag { padding: 3px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .layer-tag.base_rule { background: #f1f5f9; color: #475569; }
+        .layer-tag.scene_rule { background: #eef2ff; color: #3730a3; }
+        .layer-tag.llm_gap_rule { background: #fdf4ff; color: #7e22ce; }
+        .layer-tag.llm_relevance { background: #fffbeb; color: #92400e; }
+        .layer-tag.skipped { background: var(--bg-3); color: var(--text-4); }
+        .final-box { background: linear-gradient(135deg,#ecfdf5,#d1fae5); border: 1px solid #6ee7b7; border-radius: 12px; padding: 16px; margin-top: 12px; }
+        .final-box-title { font-size: 13px; font-weight: 700; color: #065f46; margin-bottom: 10px; }
+        .final-item { font-size: 13px; color: #065f46; padding: 6px 10px; background: rgba(255,255,255,0.7); border-radius: 6px; margin-bottom: 6px; word-break: break-all; }
+        .stats-overview { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+        @media (max-width: 800px) { .stats-overview { grid-template-columns: repeat(2, 1fr); } }
+        .stat-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+        .stat-card-num { font-size: 28px; font-weight: 700; color: var(--text-1); }
+        .stat-card-label { font-size: 12px; color: var(--text-4); margin-top: 4px; }
+        .stat-card.highlight { background: linear-gradient(135deg,#ecfdf5,#d1fae5); border-color: #6ee7b7; }
+        .stat-card.highlight .stat-card-num { color: #065f46; }
+        .ctrl-switch { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-2); padding: 8px 12px; background: var(--bg-2); border-radius: 8px; cursor: pointer; }
+        .ctrl-switch input { cursor: pointer; }
     </style>
 </head>
 <body>
@@ -175,11 +248,14 @@
         </header>
         <nav class="nav-bar">
             <div class="nav-inner">
+                <div class="nav-item" :class="{ active: currentPage === 'pipeline' }" @click="currentPage = 'pipeline'">
+                    <span>⚡</span><span>三层过滤流水线</span>
+                </div>
                 <div class="nav-item" :class="{ active: currentPage === 'smart' }" @click="currentPage = 'smart'">
-                    <span>🧠</span><span>智能匹配</span>
+                    <span>🧠</span><span>智能规则分析</span>
                 </div>
                 <div class="nav-item" :class="{ active: currentPage === 'batch' }" @click="currentPage = 'batch'">
-                    <span>📋</span><span>批量测试</span>
+                    <span>🔬</span><span>基础规则过滤</span>
                 </div>
                 <div class="nav-item" :class="{ active: currentPage === 'rules' }" @click="currentPage = 'rules'">
                     <span>📝</span><span>规则管理</span>
@@ -187,84 +263,270 @@
             </div>
         </nav>
         <main class="main-content">
+            <!-- ====== 三层过滤流水线 ====== -->
+            <div v-show="currentPage === 'pipeline'">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title"><span>⚡</span>三层过滤流水线</div>
+                        <div style="font-size:13px;color:var(--text-4);">基础规则 → 场景规则+LLM补充 → LLM语义相关性</div>
+                    </div>
+                    <div class="card-body">
+                        <div class="pipeline-layout">
+                            <!-- 左：输入配置 -->
+                            <div>
+                                <div class="input-label" style="margin-bottom:8px;">用户 Query（描述过滤目标）</div>
+                                <input type="text" class="form-input" v-model="pipelineQuery" placeholder="例：过滤小红书电商评论里的广告和刷单" style="margin-bottom:12px;">
+                                <div class="input-label" style="margin-bottom:8px;">待过滤内容（每行一条）</div>
+                                <textarea class="input-textarea" v-model="pipelineContents" placeholder="每行输入一条内容..." style="min-height:160px;"></textarea>
+                                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
+                                    <span style="font-size:12px;color:var(--text-4);align-self:center;">快速示例：</span>
+                                    <button class="btn btn-secondary btn-sm" style="font-size:12px;padding:4px 10px;" @click="fillPipelineExample('ecommerce')">电商评论</button>
+                                    <button class="btn btn-secondary btn-sm" style="font-size:12px;padding:4px 10px;" @click="fillPipelineExample('social')">社交内容</button>
+                                    <button class="btn btn-secondary btn-sm" style="font-size:12px;padding:4px 10px;" @click="fillPipelineExample('finance')">财经信息</button>
+                                </div>
+                                <!-- 流程开关 -->
+                                <div style="margin-top:16px;display:flex;flex-direction:column;gap:8px;">
+                                    <label class="ctrl-switch"><input type="checkbox" v-model="pipelineConfig.enableBaseFilter"> <strong>Layer-1</strong> 基础规则过滤（涉黄/涉政/涉暴）</label>
+                                    <label class="ctrl-switch"><input type="checkbox" v-model="pipelineConfig.enableSceneFilter"> <strong>Layer-2</strong> 场景规则 + LLM缺口分析</label>
+                                    <label class="ctrl-switch" style="padding-left:24px;" v-if="pipelineConfig.enableSceneFilter"><input type="checkbox" v-model="pipelineConfig.applyGapRules"> 即时应用LLM补充规则</label>
+                                    <label class="ctrl-switch"><input type="checkbox" v-model="pipelineConfig.enableRelevanceFilter"> <strong>Layer-3</strong> LLM语义相关性筛选</label>
+                                    <div v-if="pipelineConfig.enableRelevanceFilter" style="display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--bg-2);border-radius:8px;font-size:13px;">
+                                        <span style="color:var(--text-3);">相关性阈值：</span>
+                                        <label style="cursor:pointer;"><input type="radio" v-model="pipelineConfig.minRelevance" value="high"> 高</label>
+                                        <label style="cursor:pointer;"><input type="radio" v-model="pipelineConfig.minRelevance" value="medium"> 中</label>
+                                        <label style="cursor:pointer;"><input type="radio" v-model="pipelineConfig.minRelevance" value="low"> 低</label>
+                                    </div>
+                                </div>
+                                <div class="input-footer" style="margin-top:16px;">
+                                    <span class="char-count">{{ pipelineContents.split('\n').filter(l=>l.trim()).length }} 条内容</span>
+                                    <div class="input-actions">
+                                        <button class="btn btn-secondary" @click="pipelineQuery='';pipelineContents='';pipelineResult=null;">清空</button>
+                                        <button class="btn btn-primary" @click="runPipeline" :disabled="pipelineLoading || !pipelineQuery.trim() || !pipelineContents.trim()">
+                                            <span v-if="pipelineLoading" class="spinner"></span>
+                                            <span v-else>⚡</span>
+                                            {{ pipelineLoading ? '流水线运行中...' : '运行流水线' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- 右：结果 -->
+                            <div class="result-section">
+                                <div v-if="!pipelineLoading && !pipelineResult" class="result-empty">
+                                    <span class="icon">⚡</span>
+                                    <span>流水线将依次执行三层过滤，返回最终保留的内容</span>
+                                </div>
+                                <div v-if="pipelineLoading" class="loading-container">
+                                    <div class="loading-brain">⚡</div>
+                                    <div class="loading-text">流水线运行中<span class="loading-dots"></span></div>
+                                    <div style="margin-top:8px;font-size:12px;color:var(--text-4);">三层过滤需要一些时间，请耐心等待</div>
+                                </div>
+                                <div v-if="!pipelineLoading && pipelineResult">
+                                    <!-- 统计概览 -->
+                                    <div class="stats-overview">
+                                        <div class="stat-card">
+                                            <div class="stat-card-num">{{ pipelineResult.stats.total_input }}</div>
+                                            <div class="stat-card-label">输入总数</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-card-num" style="color:var(--danger);">{{ pipelineResult.stats.layer1_filtered + pipelineResult.stats.layer2_filtered }}</div>
+                                            <div class="stat-card-label">规则过滤</div>
+                                        </div>
+                                        <div class="stat-card">
+                                            <div class="stat-card-num" style="color:var(--warning);">{{ pipelineResult.stats.layer3_dropped }}</div>
+                                            <div class="stat-card-label">语义过滤</div>
+                                        </div>
+                                        <div class="stat-card highlight">
+                                            <div class="stat-card-num">{{ pipelineResult.stats.final_count }}</div>
+                                            <div class="stat-card-label">最终保留</div>
+                                        </div>
+                                    </div>
+                                    <!-- 识别场景 -->
+                                    <div v-if="pipelineResult.detected_scenario" style="margin-bottom:14px;display:flex;align-items:center;gap:8px;">
+                                        <span style="font-size:13px;color:var(--text-3);">识别场景：</span>
+                                        <span class="scene-badge" :class="pipelineResult.detected_scenario">
+                                            {{ sceneEmoji(pipelineResult.detected_scenario) }} {{ {'normal':'通用','ecommerce':'电商','news':'新闻','social':'社交','finance':'财经','medical':'医疗','education':'教育'}[pipelineResult.detected_scenario] || pipelineResult.detected_scenario }}
+                                        </span>
+                                    </div>
+                                    <!-- Layer-1 结果 -->
+                                    <div class="layer-block">
+                                        <div class="layer-block-header l1">
+                                            <div class="layer-badge l1">L1</div>
+                                            <span>基础规则过滤</span>
+                                            <span style="margin-left:auto;font-size:12px;font-weight:400;">过滤 {{ pipelineResult.stats.layer1_filtered }} 条 / 通过 {{ pipelineResult.stats.layer1_passed }} 条</span>
+                                        </div>
+                                        <div class="layer-block-body" v-if="pipelineResult.layer1_results.filter(r=>r.filtered).length">
+                                            <table class="pipeline-table">
+                                                <thead><tr><th>内容</th><th style="width:160px;">命中规则</th></tr></thead>
+                                                <tbody>
+                                                    <tr v-for="(r,i) in pipelineResult.layer1_results.filter(r=>r.filtered)" :key="i">
+                                                        <td class="content-cell" :title="r.content">{{ r.content }}</td>
+                                                        <td><span class="layer-tag base_rule">{{ r.rule || '通用规则' }}</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div v-else class="layer-block-body" style="color:var(--text-4);font-size:13px;">无命中（全部通过）</div>
+                                    </div>
+                                    <!-- Layer-2 结果 -->
+                                    <div class="layer-block">
+                                        <div class="layer-block-header l2">
+                                            <div class="layer-badge l2">L2</div>
+                                            <span>场景规则 + LLM缺口分析</span>
+                                            <span style="margin-left:auto;font-size:12px;font-weight:400;">过滤 {{ pipelineResult.stats.layer2_filtered }} 条 / 保留选中 {{ pipelineResult.stats.layer2_selected }} 条</span>
+                                        </div>
+                                        <div class="layer-block-body" v-if="pipelineResult.layer2_results.filter(r=>r.matched).length">
+                                            <table class="pipeline-table">
+                                                <thead><tr><th>内容</th><th style="width:130px;">命中规则</th><th style="width:70px;">用途</th><th style="width:90px;">来源</th></tr></thead>
+                                                <tbody>
+                                                    <tr v-for="(r,i) in pipelineResult.layer2_results.filter(r=>r.matched)" :key="i">
+                                                        <td class="content-cell" :title="r.content">{{ r.content }}</td>
+                                                        <td style="font-size:12px;">{{ r.rule || '-' }}</td>
+                                                        <td><span class="rule-card-purpose" :class="r.purpose||'filter'" style="font-size:11px;">{{ r.purpose==='select'?'保留':'过滤' }}</span></td>
+                                                        <td><span class="layer-tag" :class="r.layer||'scene_rule'">{{ {'scene_rule':'场景规则','llm_gap_rule':'LLM补充','skipped':'跳过'}[r.layer]||r.layer }}</span></td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div v-else class="layer-block-body" style="color:var(--text-4);font-size:13px;">无命中（全部通过）</div>
+                                    </div>
+                                    <!-- Layer-3 结果 -->
+                                    <div class="layer-block" v-if="pipelineResult.layer3_results && pipelineResult.layer3_results.filter(r=>!r.kept && r.layer!=='skipped').length">
+                                        <div class="layer-block-header l3">
+                                            <div class="layer-badge l3">L3</div>
+                                            <span>LLM语义相关性筛选</span>
+                                            <span style="margin-left:auto;font-size:12px;font-weight:400;">筛除 {{ pipelineResult.stats.layer3_dropped }} 条</span>
+                                        </div>
+                                        <div class="layer-block-body">
+                                            <table class="pipeline-table">
+                                                <thead><tr><th>内容</th><th style="width:100px;">相关性</th><th style="width:70px;">分数</th></tr></thead>
+                                                <tbody>
+                                                    <tr v-for="(r,i) in pipelineResult.layer3_results.filter(r=>!r.kept && r.layer!=='skipped')" :key="i">
+                                                        <td class="content-cell" :title="r.content">{{ r.content }}</td>
+                                                        <td><span class="layer-tag llm_relevance">{{ r.relevance }}</span></td>
+                                                        <td>{{ (r.score*100).toFixed(0) }}%</td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <!-- 最终结果 -->
+                                    <div class="final-box">
+                                        <div class="final-box-title">✅ 最终保留内容（{{ pipelineResult.final_results.length }} 条）</div>
+                                        <div v-if="pipelineResult.final_results.length">
+                                            <div class="final-item" v-for="(c,i) in pipelineResult.final_results" :key="i">{{ c }}</div>
+                                        </div>
+                                        <div v-else style="font-size:13px;color:#065f46;opacity:0.7;">所有内容均被过滤</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div v-show="currentPage === 'smart'">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title"><span>🎯</span>智能规则匹配</div>
-                        <div style="font-size: 13px; color: var(--text-4);">LLM 驱动的智能规则理解与生成</div>
+                        <div class="card-title"><span>🧠</span>智能规则匹配</div>
+                        <div style="font-size: 13px; color: var(--text-4);">场景感知 · LLM 思维链 · 缺口规则生成</div>
                     </div>
                     <div class="card-body">
                         <div class="smart-match-layout">
+                            <!-- 输入区 -->
                             <div>
-                                <div class="input-label">输入查询或内容</div>
-                                <textarea class="input-textarea" v-model="smartQuery" placeholder="输入自然语言查询，例如：&#10;• 帮我找便宜的丽江民宿，别看广告&#10;• 过滤掉所有推广内容，只保留高赞评论"></textarea>
-                                <div class="input-footer">
+                                <div class="input-label">输入过滤需求描述</div>
+                                <textarea class="input-textarea" v-model="smartQuery" placeholder="用自然语言描述你的过滤需求，例如：&#10;• 过滤掉电商评论里的刷单和虚假好评&#10;• 只保留有投资价值的财经分析，去掉喊单&#10;• 帮我找丽江民宿的真实体验，别看广告"></textarea>
+                                <div style="margin-top: 10px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                    <span style="font-size: 12px; color: var(--text-4); align-self: center;">快速示例：</span>
+                                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 10px;" @click="smartQuery='过滤电商评论里的刷单、虚假好评和广告引流'">电商</button>
+                                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 10px;" @click="smartQuery='筛选真实有价值的财经分析，去掉情绪化喊单和非法荐股'">财经</button>
+                                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 10px;" @click="smartQuery='过滤社交平台上的营销推广和机器生成内容'">社交</button>
+                                    <button class="btn btn-secondary btn-sm" style="font-size: 12px; padding: 4px 10px;" @click="smartQuery='去除医疗内容中的虚假疗效宣传和处方药交易'">医疗</button>
+                                </div>
+                                <div class="input-footer" style="margin-top: 12px;">
                                     <span class="char-count">{{ smartQuery.length }} 字符</span>
                                     <div class="input-actions">
                                         <button class="btn btn-secondary" @click="smartQuery = ''; smartResult = null;">清空</button>
                                         <button class="btn btn-primary" @click="doSmartMatch" :disabled="smartLoading || !smartQuery.trim()">
                                             <span v-if="smartLoading" class="spinner"></span>
                                             <span v-else>🚀</span>
-                                            {{ smartLoading ? 'AI分析中...' : '开始智能匹配' }}
+                                            {{ smartLoading ? 'AI分析中...' : '开始智能分析' }}
                                         </button>
                                     </div>
                                 </div>
                             </div>
+                            <!-- 结果区 -->
                             <div class="result-section">
                                 <div v-if="!smartLoading && !smartResult" class="result-empty">
                                     <span class="icon">🔮</span>
-                                    <span>输入查询后，AI将分析并匹配最相关的规则</span>
+                                    <span>AI 将分析场景、匹配规则、识别缺口并生成补充规则</span>
                                 </div>
                                 <div v-if="smartLoading" class="loading-container">
                                     <div class="loading-brain">🧠</div>
                                     <div class="loading-text">AI正在思考中<span class="loading-dots"></span></div>
                                 </div>
                                 <div v-if="!smartLoading && smartResult">
-                                    <div class="match-result-header">
+                                    <!-- 场景识别结果 -->
+                                    <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 16px; flex-wrap: wrap;">
+                                        <span class="scene-badge" :class="smartResult.detected_scenario || 'normal'">
+                                            {{ sceneEmoji(smartResult.detected_scenario) }} {{ smartResult.detected_scenario_cn || '通用' }}场景
+                                        </span>
                                         <span class="match-badge" :class="getSmartResultBadgeClass()">{{ getSmartResultBadgeText() }}</span>
+                                        <span v-if="smartResult.needs_llm_filter" style="padding: 5px 12px; background: linear-gradient(135deg,#fffbeb,#fef3c7); color: #92400e; border-radius: 14px; font-size: 12px; font-weight: 600;">⚠️ 需LLM语义过滤</span>
+                                        <span v-if="smartResult.scenario_coverage === 'sufficient'" style="padding: 5px 12px; background: #ecfdf5; color: #059669; border-radius: 14px; font-size: 12px; font-weight: 600;">✓ 规则完整覆盖</span>
+                                        <span v-else-if="smartResult.scenario_coverage === 'partial'" style="padding: 5px 12px; background: #fffbeb; color: #d97706; border-radius: 14px; font-size: 12px; font-weight: 600;">⚡ 部分缺口已补充</span>
                                     </div>
+                                    <!-- 思维链 -->
                                     <div v-if="smartResult.thought_trace" class="thought-chain">
                                         <div class="thought-chain-header">
                                             <span class="thought-chain-title">💭 AI 思维链</span>
                                             <span class="thought-chain-badge">Chain of Thought</span>
                                         </div>
                                         <div class="thought-steps">
-                                            <div class="thought-step" :class="{ expanded: expandedSteps.step1 }" v-if="smartResult.thought_trace.step_1_extraction">
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step1 }" v-if="smartResult.thought_trace.step_1_extraction?.length">
                                                 <div class="thought-step-header" @click="expandedSteps.step1 = !expandedSteps.step1">
                                                     <span class="thought-step-number">1</span>
-                                                    <span class="thought-step-title">约束提取</span>
+                                                    <span class="thought-step-title">场景识别 & 意图提取</span>
                                                     <span class="thought-step-icon">▼</span>
                                                 </div>
-                                                <div class="thought-step-content" v-show="expandedSteps.step1">{{ smartResult.thought_trace.step_1_extraction }}</div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step1">
+                                                    <div v-for="(s, i) in smartResult.thought_trace.step_1_extraction" :key="i" style="margin-bottom:4px;">{{ s }}</div>
+                                                </div>
                                             </div>
-                                            <div class="thought-step" :class="{ expanded: expandedSteps.step2 }" v-if="smartResult.thought_trace.step_2_match">
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step2 }" v-if="smartResult.thought_trace.step_2_match?.length">
                                                 <div class="thought-step-header" @click="expandedSteps.step2 = !expandedSteps.step2">
                                                     <span class="thought-step-number">2</span>
-                                                    <span class="thought-step-title">规则匹配</span>
+                                                    <span class="thought-step-title">场景规则匹配</span>
                                                     <span class="thought-step-icon">▼</span>
                                                 </div>
-                                                <div class="thought-step-content" v-show="expandedSteps.step2">{{ smartResult.thought_trace.step_2_match }}</div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step2">
+                                                    <div v-for="(s, i) in smartResult.thought_trace.step_2_match" :key="i" style="margin-bottom:4px;">{{ s }}</div>
+                                                </div>
                                             </div>
-                                            <div class="thought-step" :class="{ expanded: expandedSteps.step3 }" v-if="smartResult.thought_trace.step_3_gap_analysis">
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step3 }" v-if="smartResult.thought_trace.step_3_gap_analysis?.length">
                                                 <div class="thought-step-header" @click="expandedSteps.step3 = !expandedSteps.step3">
                                                     <span class="thought-step-number">3</span>
-                                                    <span class="thought-step-title">缺口分析</span>
+                                                    <span class="thought-step-title">语义缺口分析</span>
                                                     <span class="thought-step-icon">▼</span>
                                                 </div>
-                                                <div class="thought-step-content" v-show="expandedSteps.step3">{{ smartResult.thought_trace.step_3_gap_analysis }}</div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step3">
+                                                    <div v-for="(s, i) in smartResult.thought_trace.step_3_gap_analysis" :key="i" style="margin-bottom:4px;">{{ s }}</div>
+                                                </div>
                                             </div>
-                                            <div class="thought-step" :class="{ expanded: expandedSteps.step4 }" v-if="smartResult.thought_trace.step_4_generation">
+                                            <div class="thought-step" :class="{ expanded: expandedSteps.step4 }" v-if="smartResult.thought_trace.step_4_generation?.length">
                                                 <div class="thought-step-header" @click="expandedSteps.step4 = !expandedSteps.step4">
                                                     <span class="thought-step-number">4</span>
-                                                    <span class="thought-step-title">规则生成</span>
+                                                    <span class="thought-step-title">补充规则生成</span>
                                                     <span class="thought-step-icon">▼</span>
                                                 </div>
-                                                <div class="thought-step-content" v-show="expandedSteps.step4">{{ smartResult.thought_trace.step_4_generation }}</div>
+                                                <div class="thought-step-content" v-show="expandedSteps.step4">
+                                                    <div v-for="(s, i) in smartResult.thought_trace.step_4_generation" :key="i" style="margin-bottom:4px;">{{ s }}</div>
+                                                </div>
                                             </div>
                                         </div>
                                     </div>
-                                    <div v-if="smartResult.matched_rules && smartResult.matched_rules.length > 0" class="matched-rules">
-                                        <div class="matched-rules-title">✅ 匹配到的规则</div>
+                                    <!-- 命中的场景规则 -->
+                                    <div v-if="smartResult.matched_rules?.length > 0" class="matched-rules" style="margin-top: 16px;">
+                                        <div class="matched-rules-title">✅ 规则库命中 ({{ smartResult.matched_rules.length }} 条)</div>
                                         <div v-for="rule in smartResult.matched_rules" :key="rule.rule_id" class="matched-rule-item">
                                             <div class="matched-rule-icon">📌</div>
                                             <div class="matched-rule-info">
@@ -274,15 +536,48 @@
                                             <span class="matched-rule-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
                                         </div>
                                     </div>
-                                    <div v-if="smartResult.generated_rules && smartResult.generated_rules.length > 0" class="matched-rules" style="margin-top: 20px;">
-                                        <div class="matched-rules-title">🆕 AI 生成的规则</div>
-                                        <div v-for="(rule, idx) in smartResult.generated_rules" :key="idx" class="matched-rule-item">
-                                            <div class="matched-rule-icon">✨</div>
-                                            <div class="matched-rule-info">
-                                                <div class="matched-rule-name">{{ rule.name }}</div>
-                                                <div class="matched-rule-reason">{{ rule.description }}</div>
+                                    <!-- LLM 补充的缺口规则 -->
+                                    <div v-if="smartResult.gap_rules?.length > 0" class="matched-rules" style="margin-top: 16px;">
+                                        <div class="matched-rules-title">🔧 LLM 补充缺口规则 ({{ smartResult.gap_rules.length }} 条)</div>
+                                        <div v-for="(gr, idx) in smartResult.gap_rules" :key="idx" class="gap-rule-card">
+                                            <div class="gap-rule-header">
+                                                <span class="gap-rule-name">{{ gr.name }}</span>
+                                                <div class="gap-rule-badges">
+                                                    <span class="rule-card-type">{{ gr.type }}</span>
+                                                    <span class="rule-card-purpose" :class="gr.purpose">{{ gr.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                                    <span v-if="gr.needs_llm_semantic" style="padding: 3px 8px; background: #fffbeb; color: #d97706; border-radius: 6px; font-size: 11px; font-weight: 600;">需语义过滤</span>
+                                                </div>
                                             </div>
-                                            <span class="matched-rule-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                            <div class="gap-rule-keywords">{{ Array.isArray(gr.content) ? gr.content.join(' | ') : gr.content }}</div>
+                                            <div class="gap-rule-desc" v-if="gr.description">{{ gr.description }}</div>
+                                        </div>
+                                    </div>
+                                    <!-- LLM 语义过滤提示 -->
+                                    <div v-if="smartResult.needs_llm_filter" class="llm-alert">
+                                        <span class="llm-alert-icon">⚡</span>
+                                        <div class="llm-alert-text">
+                                            <div class="llm-alert-title">建议启用 LLM 语义过滤（第三层）</div>
+                                            <div>{{ smartResult.llm_filter_reason || '存在规则引擎无法覆盖的语义模糊或上下文相关内容' }}</div>
+                                        </div>
+                                    </div>
+                                    <!-- 执行计划 -->
+                                    <div v-if="smartResult.execution_plan && Object.keys(smartResult.execution_plan).length" class="exec-plan">
+                                        <div class="exec-plan-title">📋 三层过滤执行计划</div>
+                                        <div class="exec-plan-layer" v-if="smartResult.execution_plan.layer_1">
+                                            <div class="exec-plan-layer-num l1">L1</div>
+                                            <div class="exec-plan-layer-text">{{ smartResult.execution_plan.layer_1 }}</div>
+                                        </div>
+                                        <div class="exec-plan-layer" v-if="smartResult.execution_plan.layer_2">
+                                            <div class="exec-plan-layer-num l2">L2</div>
+                                            <div class="exec-plan-layer-text">{{ smartResult.execution_plan.layer_2 }}</div>
+                                        </div>
+                                        <div class="exec-plan-layer" v-if="smartResult.execution_plan.layer_3">
+                                            <div class="exec-plan-layer-num l3">L3</div>
+                                            <div class="exec-plan-layer-text">{{ smartResult.execution_plan.layer_3 }}</div>
+                                        </div>
+                                        <div class="exec-plan-layer" v-if="smartResult.execution_plan.expected_result" style="background: var(--bg-2);">
+                                            <div class="exec-plan-layer-num" style="background: var(--success);">✓</div>
+                                            <div class="exec-plan-layer-text" style="color: var(--success); font-weight: 600;">{{ smartResult.execution_plan.expected_result }}</div>
                                         </div>
                                     </div>
                                 </div>
@@ -290,24 +585,23 @@
                         </div>
                     </div>
                 </div>
+                <!-- 建议保存的规则 -->
                 <div class="card" v-if="smartResult && smartResult.suggest_save && smartResult.suggest_save.length > 0">
                     <div class="card-header">
-                        <div class="card-title"><span>💡</span>建议保存的规则</div>
+                        <div class="card-title"><span>💡</span>建议保存到规则库</div>
                         <button class="btn btn-success btn-sm" @click="saveAllSuggested" :disabled="savingRules">
                             <span v-if="savingRules" class="spinner" style="width:14px;height:14px;"></span>
                             全部保存
                         </button>
                     </div>
                     <div class="card-body">
-                        <div v-for="(rule, idx) in smartResult.suggest_save" :key="idx" class="suggested-rule-card">
-                            <div class="suggested-rule-header">
-                                <span class="suggested-rule-name">{{ rule.name }}</span>
+                        <div v-for="(rule, idx) in smartResult.suggest_save" :key="idx" class="gap-rule-card" style="background: linear-gradient(135deg,#f0fdf4,#dcfce7); border-color: #86efac;">
+                            <div class="gap-rule-header">
+                                <span class="gap-rule-name">{{ rule.name }}</span>
                                 <span class="suggested-rule-type">{{ rule.type }} · {{ rule.purpose === 'select' ? '保留规则' : '过滤规则' }}</span>
                             </div>
-                            <div class="suggested-rule-content">{{ JSON.stringify(rule.rule, null, 2) }}</div>
-                            <div class="suggested-rule-reason">
-                                <span>💬</span><span>{{ rule.reason }}</span>
-                            </div>
+                            <div class="gap-rule-keywords">{{ Array.isArray(rule.content) ? rule.content.join(' | ') : rule.content }}</div>
+                            <div class="suggested-rule-reason"><span>💬</span><span>{{ rule.reason }}</span></div>
                             <div class="suggested-rule-actions">
                                 <button class="btn btn-secondary btn-sm" @click="ignoreSuggestedRule(idx)">忽略</button>
                                 <button class="btn btn-success btn-sm" @click="saveSuggestedRule(rule, idx)" :disabled="rule.saving">
@@ -322,19 +616,34 @@
             <div v-show="currentPage === 'batch'">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title"><span>📋</span>批量内容测试</div>
+                        <div class="card-title"><span>�</span>基础规则过滤引擎</div>
+                        <div style="display:flex; align-items:center; gap:12px;">
+                            <div style="display:flex; align-items:center; gap:8px; font-size:13px; color:var(--text-3);">
+                                <span>规则范围：</span>
+                                <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <input type="checkbox" v-model="batchGeneralOnly" style="cursor:pointer;">
+                                    <span :style="batchGeneralOnly ? 'color:var(--primary);font-weight:600;' : ''">仅通用场景规则</span>
+                                </label>
+                            </div>
+                            <div v-if="batchGeneralOnly" style="font-size:12px; color:var(--text-4); background:var(--bg-3); padding:4px 10px; border-radius:6px;">
+                                📌 使用「通用-*」规则集（垃圾/敏感内容过滤）
+                            </div>
+                            <div v-else style="font-size:12px; color:var(--warning); background:#fffbeb; padding:4px 10px; border-radius:6px; border:1px solid #fde68a;">
+                                ⚠️ 使用全部规则集
+                            </div>
+                        </div>
                     </div>
                     <div class="card-body">
-                        <div class="input-label">输入待测试内容（每行一条）</div>
-                        <textarea class="input-textarea" v-model="batchContent" placeholder="每行输入一条内容进行测试..." style="min-height: 150px;"></textarea>
+                        <div class="input-label">输入待过滤内容（每行一条）</div>
+                        <textarea class="input-textarea" v-model="batchContent" placeholder="每行输入一条内容进行过滤测试..." style="min-height: 150px;"></textarea>
                         <div class="input-footer">
                             <span class="char-count">{{ batchContent.split('\n').filter(l => l.trim()).length }} 条内容</span>
                             <div class="input-actions">
                                 <button class="btn btn-secondary" @click="batchContent = ''; batchResults = [];">清空</button>
                                 <button class="btn btn-primary" @click="doBatchTest" :disabled="batchLoading">
                                     <span v-if="batchLoading" class="spinner"></span>
-                                    <span v-else>⚡</span>
-                                    {{ batchLoading ? '测试中...' : '开始批量测试' }}
+                                    <span v-else>🔬</span>
+                                    {{ batchLoading ? '过滤中...' : '开始过滤' }}
                                 </button>
                             </div>
                         </div>
@@ -346,7 +655,7 @@
                                 </div>
                                 <div class="batch-stat-item">
                                     <div class="batch-stat-icon matched">✕</div>
-                                    <div><div class="batch-stat-value">{{ batchResults.filter(r => r.matched).length }}</div><div class="batch-stat-label">命中规则</div></div>
+                                    <div><div class="batch-stat-value">{{ batchResults.filter(r => r.matched).length }}</div><div class="batch-stat-label">已过滤</div></div>
                                 </div>
                                 <div class="batch-stat-item">
                                     <div class="batch-stat-icon passed">✓</div>
@@ -354,11 +663,11 @@
                                 </div>
                             </div>
                             <table class="batch-results-table">
-                                <thead><tr><th style="width:60px;">#</th><th style="width:100px;">状态</th><th>内容</th><th style="width:180px;">匹配规则</th></tr></thead>
+                                <thead><tr><th style="width:60px;">#</th><th style="width:100px;">状态</th><th>内容</th><th style="width:180px;">命中规则</th></tr></thead>
                                 <tbody>
                                     <tr v-for="(item, idx) in batchResults" :key="idx">
                                         <td>{{ idx + 1 }}</td>
-                                        <td><span class="batch-status-badge" :class="item.matched ? 'matched' : 'passed'">{{ item.matched ? '命中' : '通过' }}</span></td>
+                                        <td><span class="batch-status-badge" :class="item.matched ? 'matched' : 'passed'">{{ item.matched ? '已过滤' : '通过' }}</span></td>
                                         <td class="content-cell" :title="item.content">{{ item.content }}</td>
                                         <td>{{ item.rule || '-' }}</td>
                                     </tr>
@@ -390,11 +699,18 @@
                             <div class="rule-card" v-for="rule in filteredRules" :key="rule.id">
                                 <div class="rule-card-header">
                                     <span class="rule-card-name">{{ rule.name }}</span>
-                                    <span class="rule-card-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                    <div class="rule-card-badges">
+                                        <span class="rule-card-type">{{ rule.type }}</span>
+                                        <span class="rule-card-purpose" :class="rule.purpose || 'filter'">{{ rule.purpose === 'select' ? '保留' : '过滤' }}</span>
+                                    </div>
                                 </div>
-                                <div class="rule-card-pattern">{{ rule.pattern }}</div>
+                                <div class="rule-card-desc" v-if="rule.description">{{ rule.description }}</div>
+                                <div class="rule-card-pattern">{{ formatRuleContent(rule.content) }}</div>
                                 <div class="rule-card-footer">
-                                    <span class="rule-card-priority">⚡ 优先级 {{ rule.priority || 0 }}</span>
+                                    <div class="rule-card-meta">
+                                        <span class="rule-card-category" v-if="rule.category">📁 {{ rule.category }}</span>
+                                        <span class="rule-card-priority">⚡ 优先级 {{ rule.priority || 0 }}</span>
+                                    </div>
                                     <div class="rule-card-actions">
                                         <button class="btn-icon" @click="editRule(rule)">✏️</button>
                                         <button class="btn-icon delete" @click="deleteRule(rule.id)">🗑️</button>
@@ -423,13 +739,38 @@
                         <input class="form-input" v-model="ruleForm.name" placeholder="输入规则名称">
                     </div>
                     <div class="form-group">
-                        <label class="form-label">匹配模式 <span class="required">*</span></label>
-                        <textarea class="form-input" v-model="ruleForm.pattern" placeholder="输入关键词，多个用 | 分隔" rows="4" style="resize: vertical; font-family: Monaco, Menlo, monospace;"></textarea>
-                        <div class="form-hint">支持正则表达式，多个关键词使用 | 分隔</div>
+                        <label class="form-label">规则描述</label>
+                        <input class="form-input" v-model="ruleForm.description" placeholder="输入规则描述（可选）">
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">规则类型</label>
+                            <select class="form-select" v-model="ruleForm.type">
+                                <option value="keyword">关键词</option>
+                                <option value="regex">正则表达式</option>
+                                <option value="pattern">模式规则</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">规则分类</label>
+                            <select class="form-select" v-model="ruleForm.category">
+                                <option value="">无分类</option>
+                                <option value="spam">垃圾信息</option>
+                                <option value="ad">广告</option>
+                                <option value="sensitive">敏感内容</option>
+                                <option value="profanity">不当言论</option>
+                                <option value="other">其他</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">匹配内容 <span class="required">*</span></label>
+                        <textarea class="form-input" v-model="ruleForm.content" placeholder='输入JSON数组格式，如：["关键词1", "关键词2"]' rows="4" style="resize: vertical; font-family: Monaco, Menlo, monospace;"></textarea>
+                        <div class="form-hint">关键词/正则规则使用 JSON 数组格式，如：["微信", "加V", "私信"]</div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">规则用途</label>
                             <select class="form-select" v-model="ruleForm.purpose">
                                 <option value="filter">过滤（命中即删除）</option>
                                 <option value="select">保留（命中即保留）</option>
@@ -454,7 +795,88 @@
         createApp({
             setup() {
                 const API_BASE = '';
-                const currentPage = ref('smart');
+                const currentPage = ref('pipeline');
+
+                // ─── 三层流水线 ───────────────────────────────────────
+                const pipelineQuery = ref('');
+                const pipelineContents = ref('');
+                const pipelineLoading = ref(false);
+                const pipelineResult = ref(null);
+                const pipelineConfig = reactive({
+                    enableBaseFilter: true,
+                    enableSceneFilter: true,
+                    applyGapRules: true,
+                    enableRelevanceFilter: true,
+                    minRelevance: 'medium',
+                });
+                const pipelineExamples = {
+                    ecommerce: {
+                        query: '过滤电商评论里的刷单、虚假好评和广告引流',
+                        contents: [
+                            '这款手机真的太好用了，拍照超级清晰，强烈推荐！',
+                            '加微信：abc123 领取返现，好评返5元！',
+                            '刷好评，职业差评师，价格美丽，私信联系',
+                            '商品质量一般，客服态度差，物流很慢，不推荐',
+                            '五星好评！东西很好！五星好评！东西很好！',
+                            '真实买家，收到货确实不错，物流也快，下次还会购买',
+                            '扫码关注公众号，免费送优惠券，活动时间有限',
+                            '包装很精致，质量超出预期，性价比很高',
+                        ].join('\n'),
+                    },
+                    social: {
+                        query: '过滤社交平台上的营销推广和机器生成内容',
+                        contents: [
+                            '今天和朋友去了三亚，海水好蓝，心情超棒！',
+                            '点击链接领取免费礼品，限时福利不容错过！',
+                            '兼职招募，日赚500+，无门槛，手机操作，私信我',
+                            '这家餐厅真的好吃，强烈推荐烤鱼和小龙虾',
+                            '转发抽奖，关注必中，百分百有奖',
+                            '今天看了一部电影，剧情很感人，推荐大家去看',
+                            '低价出售账号，粉丝过万，有意者私聊',
+                        ].join('\n'),
+                    },
+                    finance: {
+                        query: '筛选真实有价值的财经分析，去掉情绪化喊单和非法荐股',
+                        contents: [
+                            '美联储今日宣布加息25个基点，符合市场预期',
+                            '稳赚不赔！内部消息，明天这只股票必涨停！',
+                            '从宏观视角分析，当前A股估值处于历史低位区间',
+                            '加入我们的VIP群，每日精准推荐，月收益翻倍',
+                            '央行最新货币政策报告显示，今年GDP目标为5%',
+                            '跟着我操作，保本保利，亏损我全赔',
+                            '从技术面看，该股形成标准的头肩底形态，支撑位明确',
+                        ].join('\n'),
+                    },
+                };
+                const fillPipelineExample = (type) => {
+                    const ex = pipelineExamples[type];
+                    if (ex) { pipelineQuery.value = ex.query; pipelineContents.value = ex.contents; }
+                };
+                const runPipeline = async () => {
+                    const contents = pipelineContents.value.split('\n').filter(l => l.trim());
+                    if (!pipelineQuery.value.trim() || !contents.length) return;
+                    pipelineLoading.value = true; pipelineResult.value = null;
+                    try {
+                        const res = await fetch(API_BASE + '/api/pipeline/run', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                query: pipelineQuery.value,
+                                contents,
+                                enable_base_filter: pipelineConfig.enableBaseFilter,
+                                enable_scene_filter: pipelineConfig.enableSceneFilter,
+                                apply_gap_rules: pipelineConfig.applyGapRules,
+                                enable_relevance_filter: pipelineConfig.enableRelevanceFilter,
+                                min_relevance: pipelineConfig.minRelevance,
+                            }),
+                        });
+                        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '流水线运行失败'); }
+                        pipelineResult.value = await res.json();
+                    } catch (e) { ElementPlus.ElMessage.error('流水线运行失败: ' + e.message); }
+                    finally { pipelineLoading.value = false; }
+                };
+
+                // ─── 智能规则分析 ─────────────────────────────────────
                 const smartQuery = ref('');
                 const smartLoading = ref(false);
                 const smartResult = ref(null);
@@ -463,12 +885,13 @@
                 const batchContent = ref('');
                 const batchLoading = ref(false);
                 const batchResults = ref([]);
+                const batchGeneralOnly = ref(true);
                 const rules = ref([]);
                 const searchQuery = ref('');
                 const ruleFilter = ref('all');
                 const ruleDialogVisible = ref(false);
                 const editingRule = ref(null);
-                const ruleForm = ref({ name: '', pattern: '', purpose: 'filter', priority: 0 });
+                const ruleForm = ref({ name: '', content: '', type: 'keyword', category: '', purpose: 'filter', priority: 0, description: '' });
                 const filteredRules = computed(() => {
                     let result = rules.value;
                     if (ruleFilter.value !== 'all') result = result.filter(r => (r.purpose || 'filter') === ruleFilter.value);
@@ -481,27 +904,36 @@
                 const loadRules = async () => {
                     try { const res = await fetch(API_BASE + '/api/rules'); rules.value = await res.json(); } catch (e) { ElementPlus.ElMessage.error('加载规则失败'); }
                 };
+                const formatRuleContent = (content) => {
+                    try {
+                        const parsed = JSON.parse(content);
+                        if (Array.isArray(parsed)) return parsed.join(' | ');
+                        if (typeof parsed === 'object') return JSON.stringify(parsed, null, 2);
+                        return content;
+                    } catch (e) { return content; }
+                };
                 const getSmartResultBadgeClass = () => {
                     if (!smartResult.value) return 'none';
                     const hasMatched = smartResult.value.matched_rules?.length > 0;
-                    const hasGenerated = smartResult.value.generated_rules?.length > 0;
-                    if (!hasMatched && !hasGenerated) return 'none';
+                    const hasGap = smartResult.value.gap_rules?.length > 0;
+                    if (!hasMatched && !hasGap) return 'none';
                     const firstMatch = smartResult.value.matched_rules?.[0];
-                    const firstGen = smartResult.value.generated_rules?.[0];
-                    const purpose = firstMatch?.purpose || firstGen?.purpose || 'filter';
+                    const purpose = firstMatch?.purpose || 'filter';
                     return purpose === 'select' ? 'select' : 'filter';
                 };
                 const getSmartResultBadgeText = () => {
                     if (!smartResult.value) return '';
-                    const hasMatched = smartResult.value.matched_rules?.length > 0;
-                    const hasGenerated = smartResult.value.generated_rules?.length > 0;
-                    if (!hasMatched && !hasGenerated) return '✓ 未命中任何规则';
-                    const matchCount = (smartResult.value.matched_rules?.length || 0) + (smartResult.value.generated_rules?.length || 0);
+                    const matchCount = smartResult.value.matched_rules?.length || 0;
+                    const gapCount = smartResult.value.gap_rules?.length || 0;
+                    if (!matchCount && !gapCount) return '✓ 无规则命中';
                     const firstMatch = smartResult.value.matched_rules?.[0];
-                    const firstGen = smartResult.value.generated_rules?.[0];
-                    const purpose = firstMatch?.purpose || firstGen?.purpose || 'filter';
-                    return purpose === 'select' ? '✓ 命中 ' + matchCount + ' 条保留规则' : '✕ 命中 ' + matchCount + ' 条过滤规则';
+                    const purpose = firstMatch?.purpose || 'filter';
+                    const total = matchCount + gapCount;
+                    return purpose === 'select'
+                        ? `✓ 命中 ${matchCount} 条保留规则` + (gapCount ? `，补充 ${gapCount} 条` : '')
+                        : `✕ 命中 ${matchCount} 条过滤规则` + (gapCount ? `，补充 ${gapCount} 条` : '');
                 };
+                const sceneEmoji = (s) => ({ normal:'🌐', ecommerce:'🛒', news:'📰', social:'💬', finance:'📈', medical:'🏥', education:'🎓' }[s] || '🌐');
                 const doSmartMatch = async () => {
                     if (!smartQuery.value.trim()) return;
                     smartLoading.value = true; smartResult.value = null;
@@ -538,22 +970,25 @@
                     if (!lines.length) { ElementPlus.ElMessage.warning('请输入测试内容'); return; }
                     batchLoading.value = true; batchResults.value = [];
                     try {
-                        const res = await fetch(API_BASE + '/api/batch-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: lines }) });
+                        const res = await fetch(API_BASE + '/api/batch-test', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: lines, general_only: batchGeneralOnly.value }) });
                         batchResults.value = await res.json();
                     } catch (e) { ElementPlus.ElMessage.error('测试失败: ' + e.message); } finally { batchLoading.value = false; }
                 };
-                const showAddRuleDialog = () => { editingRule.value = null; ruleForm.value = { name: '', pattern: '', purpose: 'filter', priority: 0 }; ruleDialogVisible.value = true; };
-                const editRule = (rule) => { editingRule.value = rule; ruleForm.value = { ...rule }; ruleDialogVisible.value = true; };
+                const showAddRuleDialog = () => { editingRule.value = null; ruleForm.value = { name: '', content: '[""]', type: 'keyword', category: '', purpose: 'filter', priority: 0, description: '' }; ruleDialogVisible.value = true; };
+                const editRule = (rule) => { editingRule.value = rule; ruleForm.value = { name: rule.name, content: rule.content, type: rule.type || 'keyword', category: rule.category || '', purpose: rule.purpose || 'filter', priority: rule.priority || 0, description: rule.description || '' }; ruleDialogVisible.value = true; };
                 const saveRule = async () => {
-                    if (!ruleForm.value.name || !ruleForm.value.pattern) { ElementPlus.ElMessage.warning('请填写规则名称和匹配模式'); return; }
+                    if (!ruleForm.value.name || !ruleForm.value.content) { ElementPlus.ElMessage.warning('请填写规则名称和匹配内容'); return; }
+                    // 验证 JSON 格式
+                    try { JSON.parse(ruleForm.value.content); } catch (e) { ElementPlus.ElMessage.error('匹配内容必须是有效的 JSON 格式'); return; }
                     try {
                         const url = editingRule.value ? API_BASE + '/api/rules/' + editingRule.value.id : API_BASE + '/api/rules';
                         const method = editingRule.value ? 'PUT' : 'POST';
-                        await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ruleForm.value) });
+                        const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(ruleForm.value) });
+                        if (!res.ok) { const err = await res.json(); throw new Error(err.detail || '保存失败'); }
                         ElementPlus.ElMessage.success('保存成功');
                         ruleDialogVisible.value = false;
                         loadRules();
-                    } catch (e) { ElementPlus.ElMessage.error('保存失败'); }
+                    } catch (e) { ElementPlus.ElMessage.error(e.message || '保存失败'); }
                 };
                 const deleteRule = async (id) => {
                     try {
@@ -564,7 +999,22 @@
                     } catch (e) {}
                 };
                 onMounted(() => { loadRules(); });
-                return { currentPage, smartQuery, smartLoading, smartResult, savingRules, expandedSteps, batchContent, batchLoading, batchResults, rules, searchQuery, ruleFilter, filteredRules, ruleDialogVisible, editingRule, ruleForm, loadRules, getSmartResultBadgeClass, getSmartResultBadgeText, doSmartMatch, saveSuggestedRule, ignoreSuggestedRule, saveAllSuggested, doBatchTest, showAddRuleDialog, editRule, saveRule, deleteRule };
+                return {
+                    currentPage,
+                    // 流水线
+                    pipelineQuery, pipelineContents, pipelineLoading, pipelineResult, pipelineConfig,
+                    fillPipelineExample, runPipeline,
+                    // 智能匹配
+                    smartQuery, smartLoading, smartResult, savingRules, expandedSteps,
+                    // 基础过滤
+                    batchContent, batchLoading, batchResults, batchGeneralOnly,
+                    // 规则管理
+                    rules, searchQuery, ruleFilter, filteredRules, ruleDialogVisible, editingRule, ruleForm,
+                    // 方法
+                    loadRules, formatRuleContent, getSmartResultBadgeClass, getSmartResultBadgeText, sceneEmoji,
+                    doSmartMatch, saveSuggestedRule, ignoreSuggestedRule, saveAllSuggested,
+                    doBatchTest, showAddRuleDialog, editRule, saveRule, deleteRule,
+                };
             }
         }).use(ElementPlus).mount('#app');
     </script>

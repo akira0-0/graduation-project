@@ -180,6 +180,7 @@ class RuleManager:
         category: Optional[str] = None,
         rule_type: Optional[str] = None,
         purpose: Optional[str] = None,
+        name_prefix: Optional[str] = None,
         limit: int = 1000,
         offset: int = 0,
     ) -> List[Rule]:
@@ -190,6 +191,7 @@ class RuleManager:
             category: 按分类筛选
             rule_type: 按类型筛选
             purpose: 按用途筛选 (filter/select)
+            name_prefix: 按规则名称前缀筛选，如 "通用-" 只取通用场景规则
             limit: 返回数量限制
             offset: 偏移量
         """
@@ -207,6 +209,9 @@ class RuleManager:
         if purpose:
             query += " AND purpose = ?"
             params.append(purpose)
+        if name_prefix:
+            query += " AND name LIKE ?"
+            params.append(name_prefix + "%")
         
         query += " ORDER BY priority DESC, id ASC LIMIT ? OFFSET ?"
         params.extend([limit, offset])

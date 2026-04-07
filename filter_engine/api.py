@@ -49,15 +49,6 @@ class RuleGenerateRequest(BaseModel):
     category: Optional[str] = Field(None, description="目标类别")
 
 
-class SmartFilterRequest(BaseModel):
-    """智能筛选请求"""
-    query: str = Field(..., description="用户查询，如'丽江有什么好玩的'")
-    texts: List[str] = Field(..., description="待筛选文本列表")
-    filter_spam: bool = Field(True, description="是否过滤垃圾广告")
-    filter_relevance: bool = Field(True, description="是否筛选相关性")
-    min_relevance: str = Field("medium", description="最低相关性: high/medium/low")
-
-
 class BatchFilterRequest(BaseModel):
     """批量过滤请求"""
     items: List[dict] = Field(..., description="数据列表")
@@ -66,8 +57,41 @@ class BatchFilterRequest(BaseModel):
 
 
 class SmartMatchRequest(BaseModel):
-    """智能规则匹配请求"""
+    """智能规则匹配请求（仅分析，不过滤数据）"""
     query: str = Field(..., description="用户自然语言查询，如'帮我找便宜的丽江民宿，别看广告'")
+    scenario: Optional[str] = Field(None, description="显式指定场景（可选）：normal/ecommerce/news/social/finance/medical/education")
+
+
+class SmartFilterRequest(BaseModel):
+    """智能过滤请求（Layer-2：场景规则 + LLM缺口分析，带数据）"""
+    query: str = Field(..., description="用户自然语言查询，描述过滤目标和场景")
+    contents: List[str] = Field(..., description="待过滤内容列表（每条为字符串）")
+    scenario: Optional[str] = Field(None, description="显式指定场景（可选）")
+    apply_gap_rules: bool = Field(True, description="是否将LLM生成的缺口规则即时应用到内容")
+
+
+class RelevanceFilterRequest(BaseModel):
+    """相关性筛选请求（Layer-3：LLM语义相关性）"""
+    query: str = Field(..., description="用户查询，如'丽江有什么好玩的'")
+    texts: List[str] = Field(..., description="待筛选文本列表")
+    filter_spam: bool = Field(True, description="是否先过滤垃圾广告")
+    filter_relevance: bool = Field(True, description="是否筛选相关性")
+    min_relevance: str = Field("medium", description="最低相关性: high/medium/low")
+
+
+class PipelineRequest(BaseModel):
+    """完整三层过滤流水线请求"""
+    query: str = Field(..., description="用户自然语言查询，描述过滤目标和场景")
+    contents: List[str] = Field(..., description="待过滤内容列表（每条为字符串）")
+    scenario: Optional[str] = Field(None, description="显式指定场景（可选）")
+    # Layer-1 控制
+    enable_base_filter: bool = Field(True, description="是否启用基础规则过滤（涉黄涉政涉暴）")
+    # Layer-2 控制
+    enable_scene_filter: bool = Field(True, description="是否启用场景规则 + LLM缺口分析")
+    apply_gap_rules: bool = Field(True, description="是否将LLM补充规则即时应用到内容")
+    # Layer-3 控制
+    enable_relevance_filter: bool = Field(True, description="是否启用LLM语义相关性筛选")
+    min_relevance: str = Field("medium", description="最低相关性阈值: high/medium/low")
 
 
 class SaveSuggestedRulesRequest(BaseModel):
@@ -87,6 +111,13 @@ app = FastAPI(
     description="规则过滤 + LLM语义过滤 + 动态规则选择",
     version="2.1.0",
 )
+
+# 启动时修复数据库中的无效正则（必须在 RuleManager 初始化之前执行）
+try:
+    from .patch_db import patch_invalid_regex
+    patch_invalid_regex()
+except Exception:
+    pass
 
 # 全局实例
 rule_manager = RuleManager(settings.DATABASE_PATH)
@@ -324,32 +355,24 @@ def get_smart_matcher() -> SmartRuleMatcher:
 
 
 @app.post("/api/filter/smart", tags=["智能筛选"])
-async def smart_filter(request: SmartFilterRequest):
+async def filter_smart_relevance(request: RelevanceFilterRequest):
     """
-    智能数据筛选
-    
+    智能数据筛选（相关性，旧接口保留兼容）
+
     功能：
-    1. 解析用户查询意图（如"丽江有什么好玩的" → 核心实体:丽江, 意图:旅游）
+    1. 解析用户查询意图
     2. 过滤垃圾/广告内容
     3. 筛选与查询相关的内容
     4. 按相关性排序返回
-    
-    适用场景：
-    - 从海量数据中筛选特定主题的内容
-    - 用户搜索查询
-    - 数据清洗和分类
     """
     try:
         sf = get_smart_filter()
-        
-        # 转换相关性级别
         relevance_map = {
             "high": RelevanceLevel.HIGH,
             "medium": RelevanceLevel.MEDIUM,
             "low": RelevanceLevel.LOW,
         }
         min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
-        
         result = sf.smart_filter(
             query=request.query,
             texts=request.texts,
@@ -363,22 +386,20 @@ async def smart_filter(request: SmartFilterRequest):
 
 
 @app.post("/api/filter/relevance", tags=["智能筛选"])
-async def filter_by_relevance(request: SmartFilterRequest):
+async def filter_by_relevance(request: RelevanceFilterRequest):
     """
     仅按相关性筛选（不过滤垃圾）
-    
+
     更快速，适合已清洗的数据
     """
     try:
         sf = get_smart_filter()
-        
         relevance_map = {
             "high": RelevanceLevel.HIGH,
             "medium": RelevanceLevel.MEDIUM,
             "low": RelevanceLevel.LOW,
         }
         min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
-        
         result = sf.relevance_filter.filter_by_relevance(
             query=request.query,
             texts=request.texts,
@@ -476,49 +497,121 @@ async def get_dynamic_stats():
 @app.post("/api/smart-match", tags=["智能匹配"])
 async def smart_match(request: SmartMatchRequest):
     """
-    智能规则匹配 - LLM驱动的规则理解与生成
-    
-    功能：
-    1. 解析用户自然语言查询，提取所有约束条件
-    2. 匹配现有规则库中的适用规则
-    3. 分析规则缺口，识别缺失的规则
-    4. 自动生成缺失规则
-    5. 组合最终过滤规则
-    6. 建议保存有价值的新规则
-    
-    示例输入：
-    - "帮我找便宜的丽江民宿，别看广告"
-    - "过滤掉所有推广内容，只保留高赞评论"
-    - "筛选最近一周的美食推荐"
-    
+    智能规则匹配（仅分析，不过滤数据）- Layer-2 分析入口
+
+    流程：
+      1. 场景识别（LLM + 关键词双保险）
+      2. 加载场景专属规则库
+      3. LLM 思维链：意图提取 → 规则匹配 → 缺口识别 → 补充规则生成
+      4. 返回分析结果（matched_rules / gap_rules / needs_llm_filter）
+    """
+    try:
+        matcher = get_smart_matcher()
+        result = await matcher.match(request.query, force_scenario=request.scenario)
+        return result.to_dict()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/smart-filter", tags=["智能匹配"])
+async def smart_filter(request: SmartFilterRequest):
+    """
+    智能过滤（带数据）- Layer-2 执行入口
+
+    在 /api/smart-match 分析的基础上，对提供的 contents 执行：
+      1. LLM 分析 query → 识别场景、匹配/生成规则
+      2. 场景规则引擎过滤（通用规则 + 场景规则 + LLM缺口规则）
+
     返回：
-    - thought_trace: 思维链追踪（CoT）
-    - matched_rules: 匹配到的现有规则
-    - generated_rules: 生成的新规则
-    - final_rule: 组合后的最终规则
-    - suggest_save: 建议保存的规则
+      - match_analysis: 与 /api/smart-match 相同的分析结果
+      - filter_results: 每条内容的过滤结果（含命中规则、layer 标记）
+      - stats: 统计汇总（含 needs_llm_filter 标记，告知是否需进入 Layer-3）
     """
     try:
         matcher = get_smart_matcher()
-        result = await matcher.match(request.query)
-        return result.to_dict()
+        result = await matcher.match(request.query, force_scenario=request.scenario)
+
+        import re as _re
+        scenario = result.detected_scenario
+        _, scene_rules = matcher._load_rules_for_scenario(scenario)
+
+        # 预解析场景规则（Layer-2 规则库，不含通用规则，通用规则由 Layer-1 负责）
+        parsed_scene_rules = []
+        for rule in scene_rules:
+            try:
+                keywords = json.loads(rule.content)
+                if not isinstance(keywords, list):
+                    keywords = [rule.content]
+            except Exception:
+                keywords = [rule.content] if rule.content else []
+            if keywords:
+                parsed_scene_rules.append((rule, keywords))
+
+        filter_results = []
+        for content in request.contents:
+            matched = False
+            matched_rule_name = None
+            matched_purpose = None
+            content_lower = content.lower()
+
+            for rule, keywords in parsed_scene_rules:
+                rule_type = rule.type.value if hasattr(rule.type, "value") else str(rule.type)
+                hit = False
+                if rule_type == "keyword":
+                    hit = any(str(kw).lower() in content_lower for kw in keywords if kw)
+                elif rule_type == "regex":
+                    for pat in keywords:
+                        try:
+                            if _re.search(str(pat), content, _re.IGNORECASE):
+                                hit = True
+                                break
+                        except _re.error:
+                            pass
+                else:
+                    hit = any(str(kw).lower() in content_lower for kw in keywords if kw)
+
+                if hit:
+                    matched = True
+                    matched_rule_name = rule.name
+                    matched_purpose = rule.purpose.value if hasattr(rule.purpose, "value") else str(rule.purpose)
+                    break
+
+            filter_results.append({
+                "content": content,
+                "matched": matched,
+                "rule": matched_rule_name,
+                "purpose": matched_purpose,
+                "layer": "scene_rule" if matched else None,
+            })
+
+        # 即时应用 LLM 缺口规则（不写库）
+        if request.apply_gap_rules and result.gap_rules:
+            unmatched_contents = [r["content"] for r in filter_results if not r["matched"]]
+            gap_results = matcher.apply_gap_rules_to_content(unmatched_contents, result.gap_rules)
+            gap_map = {r["content"]: r for r in gap_results}
+            for item in filter_results:
+                if not item["matched"] and item["content"] in gap_map:
+                    gr = gap_map[item["content"]]
+                    if gr["matched"]:
+                        item.update({"matched": True, "rule": gr["rule"],
+                                     "purpose": gr["purpose"], "layer": "llm_gap_rule"})
+
+        stats = {
+            "total": len(filter_results),
+            "filtered": sum(1 for r in filter_results if r["matched"] and r.get("purpose") == "filter"),
+            "selected": sum(1 for r in filter_results if r["matched"] and r.get("purpose") == "select"),
+            "passed": sum(1 for r in filter_results if not r["matched"]),
+            "needs_llm_filter": result.needs_llm_filter,
+        }
+
+        return {
+            "match_analysis": result.to_dict(),
+            "filter_results": filter_results,
+            "stats": stats,
+        }
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-@app.post("/api/smart-match/sync", tags=["智能匹配"])
-async def smart_match_sync(request: SmartMatchRequest):
-    """
-    智能规则匹配（同步版本）
-    
-    与 /api/smart-match 相同功能，但使用同步LLM调用
-    """
-    try:
-        matcher = get_smart_matcher()
-        result = matcher.match_sync(request.query)
-        return result.to_dict()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/smart-match/save", tags=["智能匹配"])
@@ -560,6 +653,7 @@ async def save_suggested_rules(request: SaveSuggestedRulesRequest):
 class BatchTestRequest(BaseModel):
     """批量测试请求"""
     contents: List[str] = Field(..., description="待测试内容列表")
+    general_only: bool = Field(True, description="是否只使用通用场景规则（名称以'通用-'开头）")
 
 
 class BatchTestItem(BaseModel):
@@ -573,47 +667,262 @@ class BatchTestItem(BaseModel):
 @app.post("/api/batch-test", response_model=List[BatchTestItem], tags=["智能匹配"])
 async def batch_test(request: BatchTestRequest):
     """
-    批量测试内容匹配
-    
-    对多条内容进行规则匹配测试，返回每条内容的匹配结果
+    基础规则过滤引擎
+
+    对多条内容进行规则匹配测试，返回每条内容的匹配结果。
+    直接复用 RuleEngine（支持关键词/正则/pattern 三种类型，AC自动机加速）。
+    general_only=True 时，只采纳名称以"通用-"开头的命中规则。
     """
     results = []
-    all_rules = rule_manager.list(enabled_only=True)
-    
+
     for content in request.contents:
+        # 复用全局 RuleEngine，支持 keyword / regex / pattern 三种类型
+        engine_result = pipeline.rule_engine.filter(content)
+
         matched = False
-        matched_rule = None
+        matched_rule_name = None
         matched_purpose = None
-        
-        # 遍历所有规则进行匹配
-        for rule in all_rules:
-            import re
-            pattern = rule.pattern if hasattr(rule, 'pattern') else rule.get('pattern', '')
-            if not pattern:
-                continue
-            
-            try:
-                if re.search(pattern, content, re.IGNORECASE):
-                    matched = True
-                    matched_rule = rule.name if hasattr(rule, 'name') else rule.get('name', '未知规则')
-                    matched_purpose = rule.purpose if hasattr(rule, 'purpose') else rule.get('purpose', 'filter')
-                    break
-            except re.error:
-                # 如果正则无效，尝试简单的字符串包含
-                if pattern.lower() in content.lower():
-                    matched = True
-                    matched_rule = rule.name if hasattr(rule, 'name') else rule.get('name', '未知规则')
-                    matched_purpose = rule.purpose if hasattr(rule, 'purpose') else rule.get('purpose', 'filter')
-                    break
-        
+
+        if engine_result.is_matched:
+            # 按 general_only 过滤命中规则列表
+            candidate_rules = engine_result.matched_rules
+            if request.general_only:
+                candidate_rules = [
+                    r for r in candidate_rules
+                    if r.rule_name.startswith("通用-")
+                ]
+
+            if candidate_rules:
+                # 优先取 filter 类型规则；若全为 select 则取第一条
+                filter_hits = [r for r in candidate_rules if r.purpose == "filter"]
+                hit_rule = filter_hits[0] if filter_hits else candidate_rules[0]
+
+                matched = True
+                matched_rule_name = hit_rule.rule_name
+                matched_purpose = hit_rule.purpose
+
         results.append(BatchTestItem(
             content=content,
             matched=matched,
-            rule=matched_rule,
-            purpose=matched_purpose
+            rule=matched_rule_name,
+            purpose=matched_purpose,
         ))
-    
+
     return results
+
+
+# ==================== 三层过滤流水线 ====================
+
+@app.post("/api/pipeline/run", tags=["三层流水线"])
+async def run_pipeline(request: PipelineRequest):
+    """
+    完整三层过滤流水线
+
+    Layer-1  基础规则过滤（涉黄/涉政/涉暴，通用规则，AC自动机）
+      ↓  剩余未被过滤的内容
+    Layer-2  场景规则 + LLM缺口分析
+             a. LLM识别场景（电商/社交/财经...）
+             b. 加载场景专属规则，逐条匹配内容
+             c. LLM思维链分析缺口，生成补充规则并即时应用
+      ↓  剩余未命中的内容
+    Layer-3  LLM语义相关性筛选
+             a. 解析 query 意图（核心实体 + 用途）
+             b. 对每条内容打相关性分数
+             c. 按 min_relevance 阈值保留相关内容
+
+    返回：
+      - layer1 / layer2 / layer3 各层详细结果
+      - final_results: 最终保留的内容列表
+      - stats: 各层过滤统计
+    """
+    try:
+        results_layer1 = []  # (content, filtered, rule, purpose)
+        results_layer2 = []
+        results_layer3 = []
+
+        import re as _re
+
+        # ── Layer-1：基础规则过滤 ──────────────────────────────────
+        layer1_detail = []
+        survivors_after_l1 = []
+
+        if request.enable_base_filter:
+            for content in request.contents:
+                engine_result = pipeline.rule_engine.filter(content)
+                filtered = False
+                hit_rule = None
+                if engine_result.is_matched:
+                    general_hits = [r for r in engine_result.matched_rules
+                                    if r.rule_name.startswith("通用-") and r.purpose == "filter"]
+                    if general_hits:
+                        filtered = True
+                        hit_rule = general_hits[0].rule_name
+
+                layer1_detail.append({
+                    "content": content,
+                    "filtered": filtered,
+                    "rule": hit_rule,
+                    "layer": "base_rule",
+                })
+                if not filtered:
+                    survivors_after_l1.append(content)
+        else:
+            survivors_after_l1 = list(request.contents)
+            layer1_detail = [{"content": c, "filtered": False, "rule": None, "layer": "skipped"}
+                             for c in request.contents]
+
+        # ── Layer-2：场景规则 + LLM缺口分析 ──────────────────────
+        layer2_detail = []
+        match_analysis = None
+        survivors_after_l2 = []
+
+        if request.enable_scene_filter and survivors_after_l1:
+            matcher = get_smart_matcher()
+            match_result = await matcher.match(request.query, force_scenario=request.scenario)
+            match_analysis = match_result.to_dict()
+
+            scenario = match_result.detected_scenario
+            _, scene_rules = matcher._load_rules_for_scenario(scenario)
+
+            parsed_scene_rules = []
+            for rule in scene_rules:
+                try:
+                    keywords = json.loads(rule.content)
+                    if not isinstance(keywords, list):
+                        keywords = [rule.content]
+                except Exception:
+                    keywords = [rule.content] if rule.content else []
+                if keywords:
+                    parsed_scene_rules.append((rule, keywords))
+
+            for content in survivors_after_l1:
+                matched = False
+                matched_rule_name = None
+                matched_purpose = None
+                content_lower = content.lower()
+
+                for rule, keywords in parsed_scene_rules:
+                    rule_type = rule.type.value if hasattr(rule.type, "value") else str(rule.type)
+                    hit = False
+                    if rule_type == "keyword":
+                        hit = any(str(kw).lower() in content_lower for kw in keywords if kw)
+                    elif rule_type == "regex":
+                        for pat in keywords:
+                            try:
+                                if _re.search(str(pat), content, _re.IGNORECASE):
+                                    hit = True
+                                    break
+                            except _re.error:
+                                pass
+                    else:
+                        hit = any(str(kw).lower() in content_lower for kw in keywords if kw)
+
+                    if hit:
+                        matched = True
+                        matched_rule_name = rule.name
+                        matched_purpose = rule.purpose.value if hasattr(rule.purpose, "value") else str(rule.purpose)
+                        break
+
+                layer2_detail.append({
+                    "content": content,
+                    "matched": matched,
+                    "rule": matched_rule_name,
+                    "purpose": matched_purpose,
+                    "layer": "scene_rule" if matched else None,
+                })
+
+            # LLM 缺口规则即时应用
+            if request.apply_gap_rules and match_result.gap_rules:
+                unmatched = [r["content"] for r in layer2_detail if not r["matched"]]
+                gap_results = matcher.apply_gap_rules_to_content(unmatched, match_result.gap_rules)
+                gap_map = {r["content"]: r for r in gap_results}
+                for item in layer2_detail:
+                    if not item["matched"] and item["content"] in gap_map:
+                        gr = gap_map[item["content"]]
+                        if gr["matched"]:
+                            item.update({"matched": True, "rule": gr["rule"],
+                                         "purpose": gr["purpose"], "layer": "llm_gap_rule"})
+
+            # filter 目的的命中内容被过滤掉，select/未命中的进入下一层
+            for item in layer2_detail:
+                if not item["matched"] or item.get("purpose") == "select":
+                    survivors_after_l2.append(item["content"])
+        else:
+            survivors_after_l2 = list(survivors_after_l1)
+            layer2_detail = [{"content": c, "matched": False, "rule": None,
+                               "purpose": None, "layer": "skipped"}
+                             for c in survivors_after_l1]
+
+        # ── Layer-3：LLM 语义相关性筛选 ──────────────────────────
+        layer3_detail = []
+        final_contents = []
+
+        if request.enable_relevance_filter and survivors_after_l2:
+            sf = get_smart_filter()
+            relevance_map = {
+                "high": RelevanceLevel.HIGH,
+                "medium": RelevanceLevel.MEDIUM,
+                "low": RelevanceLevel.LOW,
+            }
+            min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
+            rel_result = sf.relevance_filter.filter_by_relevance(
+                query=request.query,
+                texts=survivors_after_l2,
+                min_relevance=min_rel,
+            )
+            # 统一处理返回格式（list 或 dict）
+            if isinstance(rel_result, dict):
+                rel_items = rel_result.get("results", rel_result.get("items", []))
+            else:
+                rel_items = rel_result
+
+            for item in rel_items:
+                content = item.get("content", "") if isinstance(item, dict) else str(item)
+                relevance = item.get("relevance", "medium") if isinstance(item, dict) else "medium"
+                score = item.get("score", 0.5) if isinstance(item, dict) else 0.5
+                kept = relevance not in ("irrelevant",) and score >= 0.3
+                layer3_detail.append({
+                    "content": content,
+                    "relevance": relevance,
+                    "score": score,
+                    "kept": kept,
+                    "layer": "llm_relevance",
+                })
+                if kept:
+                    final_contents.append(content)
+        else:
+            final_contents = list(survivors_after_l2)
+            layer3_detail = [{"content": c, "relevance": "unknown", "score": 1.0,
+                               "kept": True, "layer": "skipped"}
+                             for c in survivors_after_l2]
+
+        # ── 统计 ──────────────────────────────────────────────────
+        stats = {
+            "total_input": len(request.contents),
+            "layer1_filtered": sum(1 for r in layer1_detail if r.get("filtered")),
+            "layer1_passed": len(survivors_after_l1),
+            "layer2_filtered": sum(1 for r in layer2_detail
+                                   if r.get("matched") and r.get("purpose") == "filter"),
+            "layer2_selected": sum(1 for r in layer2_detail
+                                   if r.get("matched") and r.get("purpose") == "select"),
+            "layer2_passed": len(survivors_after_l2),
+            "layer3_kept": len(final_contents),
+            "layer3_dropped": len(survivors_after_l2) - len(final_contents),
+            "final_count": len(final_contents),
+        }
+
+        return {
+            "query": request.query,
+            "detected_scenario": match_analysis.get("detected_scenario") if match_analysis else None,
+            "stats": stats,
+            "layer1_results": layer1_detail,
+            "layer2_results": layer2_detail,
+            "layer2_match_analysis": match_analysis,
+            "layer3_results": layer3_detail,
+            "final_results": final_contents,
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/api/stats", tags=["系统"])
