@@ -329,8 +329,9 @@ class SmartRuleMatcher:
 
         detected = data.get("detected_scenario", scenario)
         coverage = data.get("scenario_coverage", "sufficient")
-        needs_llm = data.get("needs_llm_filter", bool(gap_rules and any(r.needs_llm_semantic for r in gap_rules)))
-        llm_reason = data.get("llm_filter_reason", "")
+        # 默认启用 Layer-3 LLM 语义过滤（更严格的质量控制）
+        needs_llm = data.get("needs_llm_filter", True)
+        llm_reason = data.get("llm_filter_reason", "Layer-2 规则过滤后需要 Layer-3 语义相关性验证")
         execution_plan = data.get("execution_plan", {})
 
         return SmartMatchResult(
@@ -378,7 +379,8 @@ class SmartRuleMatcher:
         try:
             scenario = force_scenario if force_scenario else await self.detect_scenario_llm(query)
             messages = self._make_messages(query, scenario)
-            response = await self.llm_client.chat(messages=messages, temperature=0.1, max_tokens=3000)
+            # 提高 temperature 到 0.3，让 LLM 生成更多样化的关键词
+            response = await self.llm_client.chat(messages=messages, temperature=0.3, max_tokens=3000)
             raw_response = response.content
             data = self._parse_llm_response(raw_response)
             return self._build_result(query, scenario, data, raw_response)

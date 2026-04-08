@@ -118,6 +118,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
         "--dry-run", action="store_true",
         help="试运行，只输出统计，不写数据库",
     )
+    p.add_argument(
+        "--skip-layer3", action="store_true",
+        help="跳过 Layer-3 语义过滤（仅执行 Layer-2）",
+    )
+    p.add_argument(
+        "--min-relevance", type=str, default="medium",
+        choices=["high", "medium", "low"],
+        help="Layer-3 最低相关性要求：high / medium / low，默认 medium",
+    )
+    p.add_argument(
+        "--no-llm-layer3", action="store_true",
+        help="Layer-3 禁用 LLM，只用关键词匹配（快速模式）",
+    )
+    p.add_argument(
+        "--auto-cleanup", action="store_true",
+        help="执行前自动清理 2 小时前的旧 session 数据",
+    )
+    p.add_argument(
+        "--cleanup-hours", type=int, default=2,
+        help="自动清理超过指定小时数的 session，默认 2 小时",
+    )
     return p
 
 
@@ -323,6 +344,83 @@ def update_session_metadata(
 
 
 # =====================================================
+# Session 清理功能
+# =====================================================
+def cleanup_old_sessions(supabase: Client, hours: int, dry_run: bool = False) -> dict:
+    """
+    清理超过指定小时数的旧 session 数据
+    
+    Returns:
+        清理统计 {"sessions": X, "l2_posts": Y, "l2_comments": Z, "l3_results": W}
+    """
+    from datetime import timedelta
+    
+    print(f"\n{'=' * 80}")
+    print(f"🧹 自动清理旧 Session 数据")
+    print(f"{'=' * 80}")
+    print(f"⏰ 清理超过 {hours} 小时的 session")
+    
+    # 获取过期的 session
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+    cutoff_str = cutoff_time.isoformat()
+    
+    resp = supabase.table("session_metadata") \
+        .select("session_id, created_at, query_text") \
+        .lt("created_at", cutoff_str) \
+        .execute()
+    
+    old_sessions = resp.data or []
+    
+    if not old_sessions:
+        print(f"✅ 没有需要清理的旧 session")
+        return {"sessions": 0, "l2_posts": 0, "l2_comments": 0, "l3_results": 0}
+    
+    print(f"📊 找到 {len(old_sessions)} 个过期 session")
+    
+    if dry_run:
+        print(f"🧪 DRY-RUN: 仅显示，不实际删除")
+        for session in old_sessions[:5]:  # 最多显示 5 个
+            print(f"   - {session['session_id'][:16]}... ({session.get('query_text', '')[:30]}...)")
+        if len(old_sessions) > 5:
+            print(f"   ... 还有 {len(old_sessions) - 5} 个")
+        return {"sessions": len(old_sessions), "l2_posts": 0, "l2_comments": 0, "l3_results": 0}
+    
+    # 执行清理
+    total_stats = {
+        "sessions": 0,
+        "l2_posts": 0,
+        "l2_comments": 0,
+        "l3_results": 0,
+    }
+    
+    for session in old_sessions:
+        session_id = session["session_id"]
+        
+        # 删除 L2 数据
+        resp = supabase.table("session_l2_posts").delete().eq("session_id", session_id).execute()
+        total_stats["l2_posts"] += len(resp.data or [])
+        
+        resp = supabase.table("session_l2_comments").delete().eq("session_id", session_id).execute()
+        total_stats["l2_comments"] += len(resp.data or [])
+        
+        # 删除 L3 数据
+        resp = supabase.table("session_l3_results").delete().eq("session_id", session_id).execute()
+        total_stats["l3_results"] += len(resp.data or [])
+        
+        # 删除元数据
+        supabase.table("session_metadata").delete().eq("session_id", session_id).execute()
+        total_stats["sessions"] += 1
+    
+    print(f"✅ 清理完成:")
+    print(f"   - 清理 session: {total_stats['sessions']} 个")
+    print(f"   - 删除 L2 帖子: {total_stats['l2_posts']} 条")
+    print(f"   - 删除 L2 评论: {total_stats['l2_comments']} 条")
+    print(f"   - 删除 L3 结果: {total_stats['l3_results']} 条")
+    
+    return total_stats
+
+
+# =====================================================
 # 核心过滤逻辑
 # =====================================================
 def apply_rules_to_contents(
@@ -378,7 +476,7 @@ def apply_rules_to_contents(
                 if hit:
                     matched = True
                     matched_name = rule.name
-                    matched_purpose = rule.purpose.value
+                    matched_purpose = rule.purpose
                     break
             
             matched_filter_results.append({
@@ -398,8 +496,8 @@ def apply_rules_to_contents(
     has_select_rules = any(r.purpose == "select" for r in gap_rules)
     
     if matched_rules:
-        has_filter_rules = has_filter_rules or any(r.purpose.value == "filter" for r in matched_rules)
-        has_select_rules = has_select_rules or any(r.purpose.value == "select" for r in matched_rules)
+        has_filter_rules = has_filter_rules or any(r.purpose == "filter" for r in matched_rules)
+        has_select_rules = has_select_rules or any(r.purpose == "select" for r in matched_rules)
     
     # 4. 生成通过标记（综合两类规则的结果）
     pass_flags = []
@@ -727,6 +825,10 @@ async def main_async():
     supabase = create_supabase()
     matcher = SmartRuleMatcher()
     
+    # 自动清理旧 session（可选）
+    if args.auto_cleanup:
+        cleanup_old_sessions(supabase, args.cleanup_hours, dry_run=args.dry_run)
+    
     # 执行过滤
     session_id = await process_layer2_filter(
         supabase=supabase,
@@ -745,12 +847,255 @@ async def main_async():
     print(f"✅ Layer-2 过滤完成！")
     print(f"{'=' * 80}")
     print(f"🆔 Session ID: {session_id}")
-    print(f"\n📌 下一步: 执行 Layer-3 语义过滤")
-    print(f"   uv run python scripts/batch_llm_filter.py --session-id {session_id} --query \"{args.query}\"")
+    
+    # =====================================================
+    # 自动衔接 Layer-3 语义过滤
+    # =====================================================
+    if not args.skip_layer3 and not args.dry_run:
+        print(f"\n{'=' * 80}")
+        print(f"� 自动启动 Layer-3 语义相关性过滤")
+        print(f"{'=' * 80}")
+        
+        # 导入 Layer-3 模块
+        from filter_engine.core.relevance_filter import RelevanceFilter, RelevanceLevel
+        
+        # 初始化相关性过滤器
+        use_llm_layer3 = not args.no_llm_layer3
+        min_relevance_map = {
+            "high": RelevanceLevel.HIGH,
+            "medium": RelevanceLevel.MEDIUM,
+            "low": RelevanceLevel.LOW,
+        }
+        min_relevance = min_relevance_map[args.min_relevance]
+        
+        rf = RelevanceFilter(use_llm=use_llm_layer3)
+        
+        print(f"📊 Layer-3 参数:")
+        print(f"   - Query: {args.query}")
+        print(f"   - 最低相关性: {args.min_relevance}")
+        print(f"   - 使用 LLM: {use_llm_layer3}")
+        
+        # 执行 Layer-3 过滤
+        await run_layer3_filter(
+            supabase=supabase,
+            rf=rf,
+            session_id=session_id,
+            query=args.query,
+            min_relevance=min_relevance,
+            use_llm=use_llm_layer3,
+        )
+    elif args.skip_layer3:
+        print(f"\n⏭️  跳过 Layer-3（使用 --skip-layer3 参数）")
+        print(f"\n📌 手动执行 Layer-3:")
+        print(f"   uv run python scripts/batch_llm_filter.py --session-id {session_id} --query \"{args.query}\"")
+    else:
+        print(f"\n⏭️  Dry-run 模式，跳过 Layer-3")
+    
     print(f"\n📊 查询结果:")
     print(f"   SELECT * FROM session_l2_posts WHERE session_id = '{session_id}';")
     print(f"   SELECT * FROM session_l2_comments WHERE session_id = '{session_id}';")
+    print(f"   SELECT * FROM session_l3_results WHERE session_id = '{session_id}';")
     print(f"   SELECT * FROM session_metadata WHERE session_id = '{session_id}';")
+
+
+async def run_layer3_filter(
+    supabase: Client,
+    rf,  # RelevanceFilter
+    session_id: str,
+    query: str,
+    min_relevance,  # RelevanceLevel
+    use_llm: bool,
+) -> None:
+    """
+    执行 Layer-3 语义相关性过滤
+    """
+    import time
+    from typing import Dict
+    
+    print(f"\n{'─' * 60}")
+    print(f"📝 Step 1: 读取 Layer-2 通过的帖子")
+    print(f"{'─' * 60}")
+    
+    t0 = time.time()
+    
+    # 读取 Layer-2 通过的帖子（分页读取，突破 1000 条限制）
+    all_l2_posts = []
+    page_size = 1000
+    offset = 0
+    
+    while True:
+        resp = supabase.table("session_l2_posts") \
+            .select("*") \
+            .eq("session_id", session_id) \
+            .range(offset, offset + page_size - 1) \
+            .execute()
+        
+        data = resp.data or []
+        if not data:
+            break
+        
+        all_l2_posts.extend(data)
+        
+        # 如果返回数据少于 page_size，说明已经是最后一页
+        if len(data) < page_size:
+            break
+        
+        offset += page_size
+    
+    post_total = len(all_l2_posts)
+    
+    if post_total == 0:
+        print(f"⚠️  Session {session_id} 中没有 Layer-2 通过的帖子")
+        return
+    
+    print(f"✅ 读取到 {post_total} 条帖子")
+    
+    # 拼接 title + content 作为相关性判断文本
+    texts = [
+        f"{post.get('title') or ''} {post.get('content') or ''}".strip()
+        for post in all_l2_posts
+    ]
+    
+    print(f"\n{'─' * 60}")
+    print(f"🧠 Step 2: 相关性判断（完全依赖 LLM）")
+    print(f"{'─' * 60}")
+    
+    # 批量判断相关性（使用 LLM Only 模式）
+    result = rf.filter_by_relevance(
+        query=query,
+        texts=texts,
+        min_relevance=min_relevance,
+        use_llm_for_uncertain=use_llm,
+        llm_only=True,  # Layer-3 完全依赖 LLM
+    )
+    
+    # 定义相关性级别顺序
+    from filter_engine.core.relevance_filter import RelevanceLevel
+    relevance_order = {
+        RelevanceLevel.HIGH: 3,
+        RelevanceLevel.MEDIUM: 2,
+        RelevanceLevel.LOW: 1,
+        RelevanceLevel.IRRELEVANT: 0,
+    }
+    min_order = relevance_order[min_relevance]
+    
+    # 收集通过的帖子
+    valid_posts = []
+    valid_post_ids = []
+    
+    for post, res_dict in zip(all_l2_posts, result["results"]):
+        score = float(res_dict.get("score", 0.0))
+        level_str = res_dict.get("relevance", "irrelevant")
+        level = RelevanceLevel(level_str) if level_str in [e.value for e in RelevanceLevel] else RelevanceLevel.IRRELEVANT
+        passed = relevance_order[level] >= min_order
+        
+        if passed:
+            post_with_score = {
+                **post,
+                "relevance_score": round(score, 3),
+                "relevance_level": level_str,
+            }
+            valid_posts.append(post_with_score)
+            valid_post_ids.append(post["id"])
+    
+    post_elapsed = time.time() - t0
+    post_pass_rate = len(valid_post_ids) / post_total if post_total else 0
+    
+    print(f"✅ 帖子过滤完成: {post_total} → {len(valid_post_ids)} 条通过 ({post_pass_rate:.1%})")
+    print(f"   - 耗时: {post_elapsed:.1f}s")
+    
+    if not valid_post_ids:
+        print("⚠️  没有帖子通过相关性检验，Layer-3 结束")
+        # 更新元数据
+        supabase.table("session_metadata").update({
+            "l3_passed_posts": 0,
+            "status": "completed",
+        }).eq("session_id", session_id).execute()
+        return
+    
+    print(f"\n{'─' * 60}")
+    print(f"💬 Step 3: 读取有效帖子的评论")
+    print(f"{'─' * 60}")
+    
+    # 分批读取评论
+    comment_batch_size = 100
+    all_comments = []
+    for i in range(0, len(valid_post_ids), comment_batch_size):
+        chunk_ids = valid_post_ids[i: i + comment_batch_size]
+        resp = supabase.table("session_l2_comments").select("*") \
+            .eq("session_id", session_id) \
+            .in_("content_id", chunk_ids) \
+            .execute()
+        all_comments.extend(resp.data or [])
+    
+    comment_total = len(all_comments)
+    print(f"✅ 读取到 {comment_total} 条评论（来自 {len(valid_post_ids)} 个有效帖子）")
+    
+    # 按 content_id 分组评论
+    comments_by_post: Dict[str, list] = {}
+    for comment in all_comments:
+        content_id = comment.get("content_id")
+        if content_id not in comments_by_post:
+            comments_by_post[content_id] = []
+        comments_by_post[content_id].append(comment)
+    
+    # 构建最终结果
+    final_results = []
+    for post in valid_posts:
+        post_id = post["id"]
+        comments = comments_by_post.get(post_id, [])
+        final_results.append({
+            "post": post,
+            "comments": comments,
+            "query_text": query,
+        })
+    
+    print(f"✅ 构建 {len(final_results)} 个帖子+评论嵌套结果")
+    
+    print(f"\n{'─' * 60}")
+    print(f"💾 Step 4: 写入 session_l3_results")
+    print(f"{'─' * 60}")
+    
+    # 批量写入（使用 upsert 避免主键冲突）
+    rows = []
+    for item in final_results:
+        rows.append({
+            "session_id": session_id,
+            "post_id": item["post"]["id"],
+            "post_data": item["post"],
+            "comments": item["comments"],
+            "comment_count": len(item["comments"]),
+            "query_text": query,
+        })
+    
+    # 分批 upsert
+    batch_size = 50
+    total_written = 0
+    for i in range(0, len(rows), batch_size):
+        chunk = rows[i: i + batch_size]
+        supabase.table("session_l3_results").upsert(chunk).execute()
+        total_written += len(chunk)
+        if len(rows) > batch_size:
+            print(f"  ✅ 已写入 {total_written}/{len(rows)} 条...")
+    
+    print(f"✅ 写入完成: {len(rows)} 条记录")
+    
+    # 更新 session 元数据
+    from datetime import datetime, timezone
+    supabase.table("session_metadata").update({
+        "l3_passed_posts": len(valid_post_ids),
+        "status": "completed",
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("session_id", session_id).execute()
+    
+    total_elapsed = time.time() - t0
+    print(f"\n{'=' * 60}")
+    print(f"✅ Layer-3 语义过滤完成")
+    print(f"{'=' * 60}")
+    print(f"   - 帖子: {post_total} → {len(valid_post_ids)} 条通过 ({post_pass_rate:.1%})")
+    print(f"   - 评论: {comment_total} 条（来自有效帖子）")
+    print(f"   - 总耗时: {total_elapsed:.1f}s")
+    print(f"   - 数据已写入 session_l3_results")
 
 
 def main():

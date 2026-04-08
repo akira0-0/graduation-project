@@ -4,25 +4,32 @@
 处理流程（联动逻辑）：
   Step 1: 从 session_l2_posts（Layer-2 已通过）中读取帖子
   Step 2: 用 RelevanceFilter 对帖子做语义相关性判断
-          - 关键词高分 (>=0.6)  → 直接判高相关，不调 LLM
-          - 关键词极低 (<0.3)   → 直接判不相关，不调 LLM
-          - 中间地带             → 调用 LLM 判断（每批 10 条）
+          - 默认混合模式：关键词高分 (>=0.7) → 高相关，关键词低分 (<0.15) → 不相关，中间地带 → LLM 判断
+          - LLM Only 模式 (--llm-only)：完全依赖 LLM 判断，忽略关键词匹配
   Step 3: 收集通过相关性检验的帖子（valid_post_ids）
   Step 4: 从 session_l2_comments 中读取这些帖子的评论
   Step 5: 构建帖子+评论嵌套结构，写入 session_l3_results 表
 
 用法:
+    # 默认混合模式（关键词 + LLM）
     uv run python scripts/batch_llm_filter.py --session-id sess_20260408_abc123 --query "丽江有什么好玩的"
-    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "西安美食推荐" --min-relevance medium
-    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "成都旅游攻略" --dry-run
-    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "北京景点" --min-relevance high
+    
+    # 完全依赖 LLM 判断（推荐用于 Layer-3）
+    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "西安美食推荐" --llm-only
+    
+    # 只用关键词（快速模式）
+    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "成都旅游攻略" --no-llm
+    
+    # 试运行
+    uv run python scripts/batch_llm_filter.py --session-id sess_xxx --query "北京景点" --llm-only --dry-run
 
 说明:
-    - 本脚本必须先跑 batch_scene_filter.py 生成 session_l2_* 表数据
+    - 本脚本必须先跑 batch_scene_filter_smart.py 生成 session_l2_* 表数据
     - 输入：session_l2_posts / session_l2_comments
     - 输出：session_l3_results（帖子+评论嵌套 JSON）
-    - --min-relevance 控制哪些帖子会被写入最终结果
-      选项: high / medium / low，默认 medium
+    - --llm-only: 完全依赖 LLM 语义判断，最准确但调用次数多
+    - --no-llm: 只用关键词匹配，最快但准确度低
+    - --min-relevance: 控制哪些帖子会被写入最终结果（high / medium / low），默认 medium
     - 最终结果格式：[{post: {..., relevance_score: 0.87}, comments: [{...}, ...]}, ...]
 """
 
@@ -91,8 +98,16 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="禁用 LLM，只用关键词匹配判断相关性（快速模式）",
     )
     p.add_argument(
+        "--llm-only", action="store_true",
+        help="完全依赖 LLM 判断，忽略关键词匹配（最准确但较慢）",
+    )
+    p.add_argument(
         "--dry-run", action="store_true",
         help="试运行，只输出统计，不写数据库",
+    )
+    p.add_argument(
+        "--clear-existing", action="store_true",
+        help="清除该 session 的旧 L3 结果后重新运行",
     )
     return p
 
@@ -108,9 +123,31 @@ def fetch_session_l2_posts(
     supabase: Client,
     session_id: str,
 ) -> list:
-    """从 session_l2_posts 拉取 Layer-2 通过的帖子"""
-    resp = supabase.table("session_l2_posts").select("*").eq("session_id", session_id).execute()
-    return resp.data or []
+    """从 session_l2_posts 拉取 Layer-2 通过的帖子（支持分页，突破 1000 条限制）"""
+    all_posts = []
+    page_size = 1000
+    offset = 0
+    
+    while True:
+        resp = supabase.table("session_l2_posts") \
+            .select("*") \
+            .eq("session_id", session_id) \
+            .range(offset, offset + page_size - 1) \
+            .execute()
+        
+        data = resp.data or []
+        if not data:
+            break
+        
+        all_posts.extend(data)
+        
+        # 如果返回数据少于 page_size，说明已经是最后一页
+        if len(data) < page_size:
+            break
+        
+        offset += page_size
+    
+    return all_posts
 
 
 def fetch_session_l2_comments_by_post_ids(
@@ -134,7 +171,7 @@ def batch_insert_l3_results(
     results: List[Dict],
     dry_run: bool,
 ) -> None:
-    """批量写入 session_l3_results 表"""
+    """批量写入 session_l3_results 表（使用 upsert 避免主键冲突）"""
     if dry_run or not results:
         return
     rows = []
@@ -148,10 +185,10 @@ def batch_insert_l3_results(
             "query_text": item.get("query_text", ""),
         })
     
-    # 批量插入
+    # 批量 upsert（插入或更新，避免主键冲突）
     for i in range(0, len(rows), DEFAULT_WRITE_BATCH):
         chunk = rows[i: i + DEFAULT_WRITE_BATCH]
-        supabase.table("session_l3_results").insert(chunk).execute()
+        supabase.table("session_l3_results").upsert(chunk).execute()
 
 
 def update_session_metadata_l3(
@@ -170,6 +207,16 @@ def update_session_metadata_l3(
     }).eq("session_id", session_id).execute()
 
 
+def clear_session_l3_results(
+    supabase: Client,
+    session_id: str,
+) -> int:
+    """清除指定 session 的 L3 结果"""
+    resp = supabase.table("session_l3_results").delete().eq("session_id", session_id).execute()
+    deleted_count = len(resp.data) if resp.data else 0
+    return deleted_count
+
+
 # =====================================================
 # 相关性判断核心逻辑
 # =====================================================
@@ -179,6 +226,7 @@ def judge_posts_relevance(
     posts: List[Dict],
     min_relevance: RelevanceLevel,
     use_llm: bool,
+    llm_only: bool = False,
 ) -> Tuple[List[Dict], List[str]]:
     """
     对帖子做相关性判断。
@@ -198,6 +246,7 @@ def judge_posts_relevance(
         texts=texts,
         min_relevance=min_relevance,
         use_llm_for_uncertain=use_llm,
+        llm_only=llm_only,
     )
 
     relevance_order = {
@@ -236,6 +285,7 @@ def judge_posts_relevance(
 def run(args) -> None:
     supabase = create_supabase()
     use_llm = not args.no_llm
+    llm_only = args.llm_only
     min_relevance = RELEVANCE_LEVEL_MAP[args.min_relevance]
     session_id = args.session_id
 
@@ -245,8 +295,18 @@ def run(args) -> None:
     print(f"  query      : {args.query}")
     print(f"  min_rel    : {args.min_relevance}")
     print(f"  use_llm    : {use_llm}")
+    print(f"  llm_only   : {llm_only}")
     print(f"  dry_run    : {args.dry_run}")
+    print(f"  clear_old  : {args.clear_existing}")
     print(f"{'='*60}\n")
+
+    # --------------------------------------------------
+    # Step 0: 清理旧数据（如果指定）
+    # --------------------------------------------------
+    if args.clear_existing and not args.dry_run:
+        print("── Step 0: 清理旧 L3 结果 ──")
+        deleted = clear_session_l3_results(supabase, session_id)
+        print(f"  已删除 {deleted} 条旧记录\n")
 
     # 初始化 RelevanceFilter
     rf = RelevanceFilter(use_llm=use_llm)
@@ -273,6 +333,7 @@ def run(args) -> None:
         posts=all_l2_posts,
         min_relevance=min_relevance,
         use_llm=use_llm,
+        llm_only=llm_only,
     )
 
     post_elapsed = time.time() - t0

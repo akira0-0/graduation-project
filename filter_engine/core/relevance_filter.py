@@ -152,6 +152,7 @@ class RelevanceFilter:
         texts: List[str],
         min_relevance: RelevanceLevel = RelevanceLevel.MEDIUM,
         use_llm_for_uncertain: bool = True,
+        llm_only: bool = False,
     ) -> Dict[str, Any]:
         """
         根据相关性过滤文本
@@ -161,6 +162,7 @@ class RelevanceFilter:
             texts: 待筛选的文本列表
             min_relevance: 最低相关性要求
             use_llm_for_uncertain: 对不确定的文本是否使用LLM判断
+            llm_only: 是否完全使用LLM判断（忽略关键词匹配）
             
         Returns:
             {
@@ -182,13 +184,26 @@ class RelevanceFilter:
         
         # 2. 对每条文本进行相关性判断
         for text in texts:
-            result = self._judge_relevance(
-                text=text,
-                core_entity=core_entity,
-                keywords=keywords,
-                query=query,
-                use_llm=use_llm_for_uncertain,
-            )
+            if llm_only:
+                # 完全使用 LLM 判断模式
+                result = self._llm_judge_relevance(text, query, core_entity)
+                if result is None:
+                    # LLM 调用失败，返回低相关
+                    result = RelevanceResult(
+                        content=text,
+                        relevance=RelevanceLevel.LOW,
+                        score=0.3,
+                        reason="LLM 调用失败，默认低相关",
+                    )
+            else:
+                # 混合模式（关键词 + LLM）
+                result = self._judge_relevance(
+                    text=text,
+                    core_entity=core_entity,
+                    keywords=keywords,
+                    query=query,
+                    use_llm=use_llm_for_uncertain,
+                )
             results.append(result)
             
             # 根据相关性分类
@@ -274,7 +289,7 @@ class RelevanceFilter:
                 )
         
         # 3. 高置信度情况直接返回
-        if keyword_score >= 0.6:
+        if keyword_score >= 0.7:
             return RelevanceResult(
                 content=text,
                 relevance=RelevanceLevel.HIGH,
@@ -283,20 +298,32 @@ class RelevanceFilter:
                 keywords_matched=matched_keywords,
             )
         
-        # 4. 中等置信度，可选使用LLM
-        if keyword_score >= 0.3:
+        # 4. 使用 LLM 判断（放宽条件：只要有一定关键词匹配就用 LLM）
+        if keyword_score >= 0.15:
             if use_llm and self.use_llm and self.llm_engine.is_available():
                 llm_result = self._llm_judge_relevance(text, query, core_entity)
                 if llm_result:
+                    # LLM 结果优先，但结合关键词分数
+                    llm_result.score = (llm_result.score * 0.7 + keyword_score * 0.3)
                     return llm_result
             
-            return RelevanceResult(
-                content=text,
-                relevance=RelevanceLevel.MEDIUM,
-                score=keyword_score,
-                reason=f"部分匹配: {', '.join(matched_keywords)}",
-                keywords_matched=matched_keywords,
-            )
+            # LLM 不可用或失败，降级为关键词判断
+            if keyword_score >= 0.4:
+                return RelevanceResult(
+                    content=text,
+                    relevance=RelevanceLevel.MEDIUM,
+                    score=keyword_score,
+                    reason=f"部分匹配: {', '.join(matched_keywords)}",
+                    keywords_matched=matched_keywords,
+                )
+            else:
+                return RelevanceResult(
+                    content=text,
+                    relevance=RelevanceLevel.LOW,
+                    score=keyword_score,
+                    reason=f"弱匹配: {', '.join(matched_keywords)}",
+                    keywords_matched=matched_keywords,
+                )
         
         # 5. 低分但有一些匹配
         if matched_keywords:
@@ -325,6 +352,8 @@ class RelevanceFilter:
     ) -> Optional[RelevanceResult]:
         """使用LLM判断相关性"""
         try:
+            print(f"  🤖 调用 LLM 判断相关性...")  # 添加日志
+            
             prompt = f"""判断以下内容与用户查询的相关性。
 
 用户查询: {query}
@@ -342,11 +371,23 @@ class RelevanceFilter:
 
 只返回JSON，不要其他内容。"""
 
-            response = self.llm_engine._call_llm(prompt)
+            # 修复：使用 LLMEngine 的标准接口
+            messages = [
+                {"role": "system", "content": "你是一个内容相关性判断助手，请根据用户查询判断内容的相关性。"},
+                {"role": "user", "content": prompt}
+            ]
             
-            if response:
+            response = self.llm_engine.client.chat_sync(
+                messages=messages,
+                temperature=0.1,
+                max_tokens=200,
+            )
+            
+            print(f"  ✅ LLM 响应: {response.content[:100]}...")  # 添加日志
+            
+            if response and response.content:
                 # 解析JSON
-                json_match = re.search(r'\{[^}]+\}', response)
+                json_match = re.search(r'\{[^}]+\}', response.content)
                 if json_match:
                     data = json.loads(json_match.group())
                     relevance_map = {
@@ -359,9 +400,11 @@ class RelevanceFilter:
                         content=text,
                         relevance=relevance_map.get(data.get("relevance", "low"), RelevanceLevel.LOW),
                         score=float(data.get("score", 0.5)),
-                        reason=data.get("reason", "LLM判断"),
+                        reason=f"LLM判断: {data.get('reason', '')}",
                     )
         except Exception as e:
+            # 静默处理错误，降级为关键词判断
+            print(f"  ⚠️ LLM 调用失败: {e}")  # 添加错误日志
             pass
         
         return None
