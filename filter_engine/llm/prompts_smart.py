@@ -2,6 +2,7 @@
 SCENARIO_DETECT_PROMPT = (
   "你是一个文本分类器。请从下列标签中选择一个最贴切的返回，严禁输出任何解释文字：\n"
   "- ecommerce: 电商、商品、购物、物流、客服投诉\n"
+  "- travel: 旅游、景点、攻略、民宿、酒店、住宿\n"
   "- news: 时政、社会新闻、媒体报道\n"
   "- social: 社交平台动态、用户评论、粉丝互动\n"
   "- finance: 股票、理财、银行、经济分析\n"
@@ -20,6 +21,7 @@ SCENARIO_DETECT_PROMPT = (
 SCENARIO_NAMES = {
     "normal":     "通用",
     "ecommerce":  "电商",
+    "travel":     "旅游",
     "news":       "新闻",
     "social":     "社交",
     "finance":    "财经",

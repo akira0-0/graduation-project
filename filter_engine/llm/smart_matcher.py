@@ -26,22 +26,13 @@ from ..config import settings
 # ──────────────────────────────────────────────
 SCENARIO_PREFIX_MAP: Dict[str, str] = {
     "ecommerce": "电商-",
+    "travel":    "旅游-",
     "news":      "新闻-",
     "social":    "社交-",
     "finance":   "财经-",
     "medical":   "医疗-",
     "education": "教育-",
     "normal":    "",       # 通用场景不限前缀，但只用 "通用-" 规则
-}
-
-# 场景关键词（用于快速预检测，避免不必要的 LLM 调用）
-SCENARIO_DETECT_KEYWORDS: Dict[str, List[str]] = {
-    "ecommerce": ["电商", "购物", "商品", "淘宝", "京东", "拼多多", "店铺", "价格", "优惠", "好评", "差评", "发货", "物流", "退款"],
-    "news":      ["新闻", "资讯", "报道", "时事", "政治", "政策", "官方", "声明", "媒体", "舆论", "记者"],
-    "social":    ["评论", "帖子", "动态", "分享", "点赞", "转发", "关注", "粉丝", "博主", "社区", "小红书", "微博", "抖音"],
-    "finance":   ["股票", "基金", "理财", "投资", "金融", "银行", "贷款", "利率", "收益", "A股", "港股", "美股", "期货"],
-    "medical":   ["医疗", "健康", "药品", "医院", "医生", "治疗", "疾病", "症状", "诊断", "处方", "保健", "养生"],
-    "education": ["教育", "培训", "课程", "学习", "考试", "学校", "老师", "辅导", "网课", "证书", "考研", "考公"],
 }
 
 
@@ -198,45 +189,25 @@ class SmartRuleMatcher:
         self.llm_client = llm_client or create_llm_client()
 
     # ──────────────────────────────────────────
-    # 场景检测
+    # 场景检测（纯 LLM）
     # ──────────────────────────────────────────
-
-    def detect_scenario(self, query: str) -> str:
-        """
-        规则快速检测场景（无需 LLM）
-        返回 normal / ecommerce / news / social / finance / medical / education
-        """
-        query_lower = query.lower()
-        scores: Dict[str, int] = {s: 0 for s in SCENARIO_DETECT_KEYWORDS}
-        for scenario, keywords in SCENARIO_DETECT_KEYWORDS.items():
-            for kw in keywords:
-                if kw in query_lower:
-                    scores[scenario] += 1
-        best = max(scores, key=scores.get)
-        return best if scores[best] > 0 else "normal"
 
     async def detect_scenario_llm(self, query: str) -> str:
         """
-        使用 LLM 进行场景识别（更准确，适合语义复杂的 query）
-        返回标准英文场景名：normal/ecommerce/news/social/finance/medical/education
-        优先使用关键词快速识别，仅当无法确定时调用 LLM
+        使用 LLM 进行场景识别（语义理解，准确率高）
+        返回标准英文场景名：normal/ecommerce/travel/news/social/finance/medical/education
         """
-        # 先用关键词快速判断，有把握时不浪费 LLM
-        fast_result = self.detect_scenario(query)
-        if fast_result != "normal":
-            return fast_result
-
         from .prompts_smart import SCENARIO_DETECT_PROMPT
         prompt = SCENARIO_DETECT_PROMPT.replace("{{query}}", query)
         messages = [{"role": "user", "content": prompt}]
         try:
             response = await self.llm_client.chat(messages=messages, temperature=0.0, max_tokens=10)
             scenario = response.content.strip().lower()
-            valid = {"normal", "ecommerce", "news", "social", "finance", "medical", "education"}
+            valid = {"normal", "ecommerce", "travel", "news", "social", "finance", "medical", "education"}
             return scenario if scenario in valid else "normal"
         except Exception as e:
-            print(f"LLM场景识别失败，降级为关键词结果: {e}")
-            return fast_result
+            print(f"⚠️  LLM场景识别失败，使用默认场景 normal: {e}")
+            return "normal"
 
 
 

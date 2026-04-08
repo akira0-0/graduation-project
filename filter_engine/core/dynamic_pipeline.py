@@ -287,14 +287,22 @@ class DynamicFilterPipeline:
     
     def _create_temp_rule_engine(self, selected_rules: RuleSelectionResult) -> RuleEngine:
         """创建使用选中规则的临时规则引擎"""
-        # 创建一个使用特定规则的规则引擎
-        temp_engine = RuleEngine.__new__(RuleEngine)
-        temp_engine.rules = selected_rules.all_rules
-        temp_engine._compiled_rules = []
-        temp_engine._automaton = None
+        # 创建一个使用特定规则的临时规则引擎
+        # 注意：这里需要创建一个临时的 RuleManager 来包装选中的规则
+        from ..rules import RuleManager
         
-        # 编译规则
-        temp_engine._compile_rules()
+        # 创建临时规则管理器的子类，重写 list() 方法返回选中的规则
+        class _TempRuleManager(RuleManager):
+            def __init__(self, rules: List):
+                # 不调用父类 __init__，避免数据库初始化
+                self._temp_rules = rules
+            
+            def list(self, enabled_only=False, **kwargs):
+                # 直接返回预选的规则列表
+                return self._temp_rules
+        
+        temp_manager = _TempRuleManager(selected_rules.all_rules)
+        temp_engine = RuleEngine(temp_manager)
         
         return temp_engine
     
