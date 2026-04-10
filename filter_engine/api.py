@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """过滤引擎 API - FastAPI"""
 import json
-from typing import List, Optional
+from typing import List, Optional, Tuple
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query
@@ -711,7 +711,1383 @@ async def batch_test(request: BatchTestRequest):
     return results
 
 
-# ==================== 三层过滤流水线 ====================
+# ==================== 三层过滤流水线 (优化版) ====================
+
+def apply_rules_to_contents(
+    matcher,  # SmartRuleMatcher
+    contents: List[str],
+    matched_rules: List,  # List[MatchedRuleInfo]
+    gap_rules: List,      # List[GapRule]
+) -> Tuple[List[bool], dict]:
+    """
+    将已有规则和补充规则应用到内容列表
+    
+    Returns:
+        (pass_flags, stats)
+        pass_flags[i] = True 表示第 i 条内容通过
+        stats = {"filter_count": X, "select_count": Y, "default_pass_count": Z}
+    """
+    # 1. 应用 gap_rules（LLM 生成的补充规则）
+    gap_filter_results = matcher.apply_gap_rules_to_content(contents, gap_rules)
+    
+    # 2. 应用 matched_rules（规则库中已有的规则）
+    import re as _re
+    matched_filter_results = []
+    if matched_rules:
+        for text in contents:
+            matched = False
+            matched_name = None
+            matched_purpose = None
+            text_lower = text.lower()
+            
+            for rule_info in matched_rules:
+                try:
+                    rule_content = json.loads(rule_info.rule_content)
+                    if not isinstance(rule_content, list):
+                        rule_content = [rule_info.rule_content]
+                except Exception:
+                    rule_content = [rule_info.rule_content] if rule_info.rule_content else []
+                
+                if not rule_content:
+                    continue
+                
+                hit = False
+                if rule_info.rule_type == "keyword":
+                    hit = any(str(kw).lower() in text_lower for kw in rule_content if kw)
+                elif rule_info.rule_type == "regex":
+                    for pat in rule_content:
+                        try:
+                            if _re.search(str(pat), text, _re.IGNORECASE):
+                                hit = True
+                                break
+                        except _re.error:
+                            pass
+                else:
+                    hit = any(str(kw).lower() in text_lower for kw in rule_content if kw)
+                
+                if hit:
+                    matched = True
+                    matched_name = rule_info.rule_name
+                    matched_purpose = rule_info.purpose
+                    break
+            
+            matched_filter_results.append({
+                "content": text,
+                "matched": matched,
+                "rule": matched_name,
+                "purpose": matched_purpose,
+            })
+    else:
+        matched_filter_results = [
+            {"content": text, "matched": False, "rule": None, "purpose": None}
+            for text in contents
+        ]
+    
+    # 3. 判断规则类型（是否存在 select 规则）
+    has_filter_rules = any(r.purpose == "filter" for r in gap_rules)
+    has_select_rules = any(r.purpose == "select" for r in gap_rules)
+    
+    if matched_rules:
+        has_filter_rules = has_filter_rules or any(r.purpose == "filter" for r in matched_rules)
+        has_select_rules = has_select_rules or any(r.purpose == "select" for r in matched_rules)
+    
+    # 4. 生成通过标记（综合两类规则的结果）
+    pass_flags = []
+    filter_count = 0
+    select_count = 0
+    not_selected_count = 0
+    default_pass_count = 0
+    
+    for i, text in enumerate(contents):
+        gap_result = gap_filter_results[i]
+        matched_result = matched_filter_results[i]
+        
+        filtered = False
+        selected = False
+        
+        # 检查 gap_rules
+        if gap_result["matched"]:
+            if gap_result["purpose"] == "filter":
+                filtered = True
+            elif gap_result["purpose"] == "select":
+                selected = True
+        
+        # 检查 matched_rules
+        if matched_result["matched"]:
+            if matched_result["purpose"] == "filter":
+                filtered = True
+            elif matched_result["purpose"] == "select":
+                selected = True
+        
+        # 决策逻辑
+        if filtered:
+            pass_flags.append(False)
+            filter_count += 1
+        elif has_select_rules:
+            if selected:
+                pass_flags.append(True)
+                select_count += 1
+            else:
+                pass_flags.append(False)
+                not_selected_count += 1
+        else:
+            pass_flags.append(True)
+            default_pass_count += 1
+    
+    stats = {
+        "filter_count": filter_count,
+        "select_count": select_count,
+        "not_selected_count": not_selected_count,
+        "default_pass_count": default_pass_count,
+    }
+    
+    return pass_flags, stats
+
+
+class ThreeLayerFilterRequest(BaseModel):
+    """三层过滤请求（优化版）"""
+    query: str = Field(..., description="用户查询，如'丽江旅游攻略'")
+    contents: List[str] = Field(..., description="待过滤内容列表", max_items=1000)
+    
+    # 全局控制
+    session_id: Optional[str] = Field(None, description="Session ID（可选，用于追踪）")
+    platform: Optional[str] = Field(None, description="平台标识（可选）")
+    
+    # Layer-1 控制
+    enable_layer1: bool = Field(True, description="启用 Layer-1 基础规则过滤")
+    min_content_length: int = Field(4, ge=0, description="最小内容长度")
+    
+    # Layer-2 控制
+    enable_layer2: bool = Field(True, description="启用 Layer-2 场景规则过滤")
+    force_scenario: Optional[str] = Field(None, description="强制指定场景")
+    save_gap_rules: bool = Field(False, description="保存 LLM 生成的补充规则")
+    
+    # Layer-3 控制
+    enable_layer3: bool = Field(True, description="启用 Layer-3 语义相关性过滤")
+    min_relevance: str = Field("medium", description="最低相关性: high/medium/low")
+    llm_only: bool = Field(True, description="Layer-3 完全依赖 LLM 判断")
+    
+    # 性能优化
+    batch_size: int = Field(100, ge=10, le=500, description="批处理大小")
+    max_workers: int = Field(3, ge=1, le=10, description="并发处理线程数")
+
+
+class ThreeLayerFilterResponse(BaseModel):
+    """三层过滤响应"""
+    session_id: Optional[str] = None
+    query: str
+    
+    # 统计信息
+    stats: dict = Field(..., description="各层统计")
+    
+    # 最终结果
+    results: List[dict] = Field(..., description="通过三层过滤的内容")
+    
+    # 性能信息
+    performance: dict = Field(..., description="各层耗时(秒)")
+    
+    # 元数据
+    metadata: dict = Field(default_factory=dict, description="额外元数据")
+
+
+@app.post("/api/filter/three-layer", response_model=ThreeLayerFilterResponse, tags=["三层流水线"])
+async def three_layer_filter(request: ThreeLayerFilterRequest):
+    """
+    🚀 三层过滤 API（优化版）
+    
+    **性能优化**:
+    - 批量处理减少 LLM 调用
+    - 并发处理提升吞吐量
+    - 早停策略避免无效计算
+    
+    **处理流程**:
+    1. Layer-1: 基础规则过滤（垃圾/敏感内容）
+    2. Layer-2: 场景规则 + LLM 缺口分析
+    3. Layer-3: LLM 语义相关性判断
+    
+    **示例**:
+    ```bash
+    curl -X POST "http://localhost:8081/api/filter/three-layer" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "query": "丽江旅游攻略",
+        "contents": ["丽江古城游玩指南...", "广告：加微信..."],
+        "enable_layer1": true,
+        "enable_layer2": true,
+        "enable_layer3": true
+      }'
+    ```
+    
+    **返回格式**:
+    ```json
+    {
+      "session_id": "sess_xxx",
+      "query": "丽江旅游攻略",
+      "stats": {
+        "total_input": 100,
+        "layer1_passed": 85,
+        "layer2_passed": 42,
+        "layer3_passed": 28,
+        "final_count": 28
+      },
+      "results": [...],
+      "performance": {
+        "layer1": 0.5,
+        "layer2": 12.3,
+        "layer3": 8.7,
+        "total": 21.5
+      }
+    }
+    ```
+    """
+    import time
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    
+    start_time = time.time()
+    session_id = request.session_id or f"sess_{int(time.time())}_{len(request.contents)}"
+    
+    # 性能追踪
+    perf = {
+        "layer1": 0.0,
+        "layer2": 0.0,
+        "layer3": 0.0,
+        "total": 0.0,
+    }
+    
+    # 统计信息
+    stats = {
+        "total_input": len(request.contents),
+        "layer1_passed": 0,
+        "layer2_passed": 0,
+        "layer3_passed": 0,
+        "final_count": 0,
+    }
+    
+    # 结果容器（带索引）
+    items = [{"index": i, "content": c, "passed": True, "layers": []} 
+             for i, c in enumerate(request.contents)]
+    
+    try:
+        # ═══════════════════════════════════════════════════════
+        # Layer-1: 基础规则过滤
+        # ═══════════════════════════════════════════════════════
+        if request.enable_layer1:
+            t0 = time.time()
+            print(f"🔍 Layer-1: 基础规则过滤 ({len(items)} 条)")
+            
+            for item in items:
+                content = item["content"]
+                
+                # 长度过滤
+                if len(content.strip()) < request.min_content_length:
+                    item["passed"] = False
+                    item["reject_reason"] = "content_too_short"
+                    continue
+                
+                # 规则引擎过滤（只用通用规则）
+                result = pipeline.rule_engine.filter(content)
+                
+                # 检查是否命中通用规则（涉黄涉政涉暴等）
+                if result.is_matched:
+                    general_hits = [r for r in result.matched_rules 
+                                   if r.rule_name.startswith("通用-") and r.purpose == "filter"]
+                    if general_hits:
+                        item["passed"] = False
+                        item["reject_reason"] = "layer1_rule_matched"
+                        item["matched_rule"] = general_hits[0].rule_name
+                        continue
+                
+                item["layers"].append("layer1_passed")
+            
+            stats["layer1_passed"] = sum(1 for x in items if x["passed"])
+            perf["layer1"] = time.time() - t0
+            
+            print(f"  ✅ Layer-1 完成: {stats['layer1_passed']}/{stats['total_input']} 通过 "
+                  f"({perf['layer1']:.2f}s)")
+            
+            # 早停检查
+            if stats["layer1_passed"] == 0:
+                stats["final_count"] = 0
+                perf["total"] = time.time() - start_time
+                return ThreeLayerFilterResponse(
+                    session_id=session_id,
+                    query=request.query,
+                    stats=stats,
+                    results=[],
+                    performance=perf,
+                    metadata={"early_stop": "layer1", "reason": "no_content_passed"}
+                )
+        else:
+            stats["layer1_passed"] = stats["total_input"]
+        
+        # ═══════════════════════════════════════════════════════
+        # Layer-2: 场景规则 + LLM 缺口分析
+        # ═══════════════════════════════════════════════════════
+        if request.enable_layer2:
+            t0 = time.time()
+            survivors = [x for x in items if x["passed"]]
+            print(f"\n🎯 Layer-2: 场景规则过滤 ({len(survivors)} 条)")
+            
+            matcher = get_smart_matcher()
+            
+            # Step 1: LLM 分析（只需一次）
+            match_result = await matcher.match(request.query, force_scenario=request.force_scenario)
+            
+            print(f"  场景: {match_result.detected_scenario}")
+            print(f"  已有规则: {len(match_result.matched_rules)} 条")
+            print(f"  补充规则: {len(match_result.gap_rules)} 条")
+            
+            # Step 2: 应用规则
+            contents = [x["content"] for x in survivors]
+            pass_flags, rule_stats = apply_rules_to_contents(
+                matcher, contents, match_result.matched_rules, match_result.gap_rules
+            )
+            
+            # 更新通过状态
+            for item, passed in zip(survivors, pass_flags):
+                if not passed:
+                    item["passed"] = False
+                    item["reject_reason"] = "layer2_rule_matched"
+                else:
+                    item["layers"].append("layer2_passed")
+            
+            # 保存补充规则（可选）
+            if request.save_gap_rules and match_result.suggest_save:
+                saved = matcher.save_suggested_rules(match_result.suggest_save)
+                print(f"  💾 已保存 {len(saved)} 条补充规则")
+            
+            stats["layer2_passed"] = sum(1 for x in items if x["passed"])
+            perf["layer2"] = time.time() - t0
+            
+            print(f"  ✅ Layer-2 完成: {stats['layer2_passed']}/{stats['layer1_passed']} 通过 "
+                  f"({perf['layer2']:.2f}s)")
+            
+            # 早停检查
+            if stats["layer2_passed"] == 0:
+                stats["final_count"] = 0
+                perf["total"] = time.time() - start_time
+                return ThreeLayerFilterResponse(
+                    session_id=session_id,
+                    query=request.query,
+                    stats=stats,
+                    results=[],
+                    performance=perf,
+                    metadata={"early_stop": "layer2", "reason": "no_content_passed"}
+                )
+        else:
+            stats["layer2_passed"] = stats["layer1_passed"]
+        
+        # ═══════════════════════════════════════════════════════
+        # Layer-3: LLM 语义相关性过滤
+        # ═══════════════════════════════════════════════════════
+        if request.enable_layer3:
+            t0 = time.time()
+            survivors = [x for x in items if x["passed"]]
+            print(f"\n🤖 Layer-3: LLM 语义过滤 ({len(survivors)} 条)")
+            
+            sf = get_smart_filter()
+            relevance_map = {
+                "high": RelevanceLevel.HIGH,
+                "medium": RelevanceLevel.MEDIUM,
+                "low": RelevanceLevel.LOW,
+            }
+            min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
+            
+            contents = [x["content"] for x in survivors]
+            
+            # 批量相关性判断（LLM only 模式）
+            rel_result = sf.relevance_filter.filter_by_relevance(
+                query=request.query,
+                texts=contents,
+                min_relevance=min_rel,
+                use_llm_for_uncertain=True,
+                llm_only=request.llm_only,
+            )
+            
+            # 更新通过状态和相关性分数
+            relevance_order = {
+                RelevanceLevel.HIGH: 3,
+                RelevanceLevel.MEDIUM: 2,
+                RelevanceLevel.LOW: 1,
+                RelevanceLevel.IRRELEVANT: 0,
+            }
+            min_order = relevance_order[min_rel]
+            
+            for item, res_dict in zip(survivors, rel_result["results"]):
+                score = float(res_dict.get("score", 0.0))
+                level_str = res_dict.get("relevance", "irrelevant")
+                level = RelevanceLevel(level_str) if level_str in [e.value for e in RelevanceLevel] else RelevanceLevel.IRRELEVANT
+                
+                item["relevance_score"] = round(score, 3)
+                item["relevance_level"] = level_str
+                
+                if relevance_order[level] >= min_order:
+                    item["layers"].append("layer3_passed")
+                else:
+                    item["passed"] = False
+                    item["reject_reason"] = "low_relevance"
+            
+            stats["layer3_passed"] = sum(1 for x in items if x["passed"])
+            perf["layer3"] = time.time() - t0
+            
+            print(f"  ✅ Layer-3 完成: {stats['layer3_passed']}/{stats['layer2_passed']} 通过 "
+                  f"({perf['layer3']:.2f}s)")
+        else:
+            stats["layer3_passed"] = stats["layer2_passed"]
+        
+        # ═══════════════════════════════════════════════════════
+        # 汇总结果
+        # ═══════════════════════════════════════════════════════
+        final_results = [
+            {
+                "index": x["index"],
+                "content": x["content"],
+                "relevance_score": x.get("relevance_score"),
+                "relevance_level": x.get("relevance_level"),
+                "layers_passed": x["layers"],
+            }
+            for x in items if x["passed"]
+        ]
+        
+        # 按相关性分数排序
+        final_results.sort(key=lambda x: x.get("relevance_score", 0.0), reverse=True)
+        
+        stats["final_count"] = len(final_results)
+        perf["total"] = time.time() - start_time
+        
+        print(f"\n{'='*60}")
+        print(f"✅ 三层过滤完成")
+        print(f"  总输入: {stats['total_input']}")
+        print(f"  Layer-1 通过: {stats['layer1_passed']} ({stats['layer1_passed']/stats['total_input']*100:.1f}%)")
+        print(f"  Layer-2 通过: {stats['layer2_passed']} ({stats['layer2_passed']/stats['total_input']*100:.1f}%)")
+        print(f"  Layer-3 通过: {stats['layer3_passed']} ({stats['layer3_passed']/stats['total_input']*100:.1f}%)")
+        print(f"  最终结果: {stats['final_count']} 条")
+        print(f"  总耗时: {perf['total']:.2f}s")
+        print(f"{'='*60}\n")
+        
+        return ThreeLayerFilterResponse(
+            session_id=session_id,
+            query=request.query,
+            stats=stats,
+            results=final_results,
+            performance=perf,
+            metadata={
+                "scenario": match_result.detected_scenario if request.enable_layer2 else None,
+                "min_relevance": request.min_relevance,
+            }
+        )
+        
+    except Exception as e:
+        import traceback
+        print(f"\n❌ 三层过滤出错: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Filter failed: {str(e)}")
+
+
+# ==================== 三层过滤流水线 (原版，保留兼容) ====================
+
+# ==================== 一站式过滤 API（整合版）====================
+
+class CompleteFilterRequest(BaseModel):
+    """一站式过滤请求（输入 query，返回 post_data）"""
+    query: str = Field(..., description="用户查询，如'丽江旅游攻略'")
+    
+    # 数据源控制
+    platform: Optional[str] = Field(None, description="平台过滤（xhs/weibo），不填则全平台")
+    max_posts: int = Field(500, ge=10, le=2000, description="最多处理帖子数")
+    
+    # Layer-2 控制
+    force_scenario: Optional[str] = Field(None, description="强制指定场景")
+    
+    # Layer-3 控制
+    min_relevance: str = Field("medium", description="最低相关性: high/medium/low")
+    llm_only: bool = Field(True, description="Layer-3 完全依赖 LLM")
+    
+    # 返回控制
+    limit: int = Field(50, ge=1, le=500, description="返回结果数量")
+    min_score: Optional[float] = Field(None, ge=0.0, le=1.0, description="最低相关性分数过滤")
+    include_comments: bool = Field(True, description="是否包含评论")
+    
+    # Session 控制
+    save_session: bool = Field(False, description="是否保存到 Session 表（默认不保存）")
+
+
+class CompleteFilterResponse(BaseModel):
+    """一站式过滤响应（直接返回 post_data）"""
+    query: str
+    session_id: str
+    
+    # 统计信息
+    stats: dict = Field(..., description="各层统计")
+    
+    # 最终数据（直接可用的 post_data）
+    posts: List[dict] = Field(..., description="过滤后的帖子数据（含评论）")
+    
+    # 性能信息
+    performance: dict = Field(..., description="各层耗时")
+    
+    # 元数据
+    metadata: dict = Field(default_factory=dict)
+
+
+@app.post("/api/filter/complete", response_model=CompleteFilterResponse, tags=["一站式过滤"])
+async def complete_filter(request: CompleteFilterRequest):
+    """
+    🎯 一站式过滤 API（输入 query，直接返回 post_data）
+    
+    **功能**：
+    - 输入：只需 query
+    - 输出：直接可用的 post_data（帖子 + 评论）
+    - 自动执行：数据读取 → Layer-2 → Layer-3 → 返回结果
+    
+    **使用示例**：
+    ```python
+    import requests
+    
+    # 一个请求搞定
+    response = requests.post(
+        "http://localhost:8081/api/filter/complete",
+        json={"query": "丽江旅游攻略"}
+    )
+    
+    result = response.json()
+    
+    # 直接使用 post_data
+    for post in result["posts"]:
+        print(f"标题: {post['title']}")
+        print(f"相关性: {post['relevance_score']:.2f}")
+        print(f"评论数: {len(post['comments'])}")
+    ```
+    
+    **返回格式**：
+    ```json
+    {
+      "query": "丽江旅游攻略",
+      "session_id": "sess_xxx",
+      "stats": {
+        "l1_total_posts": 500,
+        "l2_passed_posts": 234,
+        "l3_passed_posts": 89,
+        "final_returned": 50
+      },
+      "posts": [
+        {
+          "id": "xxx",
+          "title": "丽江古城深度游攻略",
+          "content": "...",
+          "relevance_score": 0.92,
+          "relevance_level": "high",
+          "metrics_likes": 1523,
+          "comments": [
+            {"content": "很实用！", "author_nickname": "用户A"},
+            ...
+          ]
+        }
+      ],
+      "performance": {
+        "layer1": 1.2,
+        "layer2": 15.6,
+        "layer3": 12.3,
+        "fetch_results": 0.5,
+        "total": 29.6
+      }
+    }
+    ```
+    
+    **特点**：
+    - ✅ 无需手动传入 contents
+    - ✅ 无需手动调用第二个接口
+    - ✅ 直接返回可用的 post_data
+    - ✅ 自动处理 Session 管理
+    - ✅ 支持分数过滤和数量限制
+    """
+    import time
+    import uuid
+    from datetime import datetime, timezone
+    
+    start_time = time.time()
+    session_id = f"sess_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    
+    perf = {
+        "layer1": 0.0,
+        "layer2": 0.0,
+        "layer3": 0.0,
+        "fetch_results": 0.0,
+        "total": 0.0
+    }
+    
+    stats = {
+        "l1_total_posts": 0,
+        "l2_passed_posts": 0,
+        "l3_passed_posts": 0,
+        "final_returned": 0,
+    }
+    
+    try:
+        supabase = get_supabase()
+        matcher = get_smart_matcher()
+        sf = get_smart_filter()
+        
+        print(f"\n{'='*80}")
+        print(f"🎯 一站式过滤（Query → Post Data）")
+        print(f"{'='*80}")
+        print(f"🔍 Query: {request.query}")
+        print(f"📱 Platform: {request.platform or '全平台'}")
+        print(f"🆔 Session ID: {session_id}")
+        print(f"{'='*80}\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 1: 从 filtered_posts 读取 Layer-1 数据
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"📖 Step 1: 读取 Layer-1 数据...")
+        
+        query_builder = supabase.table("filtered_posts").select("*")
+        if request.platform:
+            query_builder = query_builder.eq("platform", request.platform)
+        
+        all_posts = []
+        page_size = 1000
+        offset = 0
+        
+        while len(all_posts) < request.max_posts:
+            resp = query_builder.range(offset, offset + page_size - 1).execute()
+            data = resp.data or []
+            if not data:
+                break
+            all_posts.extend(data)
+            offset += page_size
+            if len(data) < page_size:
+                break
+        
+        all_posts = all_posts[:request.max_posts]
+        stats["l1_total_posts"] = len(all_posts)
+        perf["layer1"] = time.time() - t0
+        
+        print(f"  ✅ 读取 {stats['l1_total_posts']} 条 ({perf['layer1']:.2f}s)\n")
+        
+        if stats["l1_total_posts"] == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="No posts found. Please run Layer-1 filter first: uv run python scripts/batch_filter.py"
+            )
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 2: Layer-2 场景规则过滤
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"🎯 Step 2: Layer-2 场景规则过滤...")
+        
+        match_result = await matcher.match(request.query, force_scenario=request.force_scenario)
+        
+        print(f"  场景: {match_result.detected_scenario}")
+        print(f"  规则: {len(match_result.matched_rules)} 已有 + {len(match_result.gap_rules)} 补充")
+        
+        post_contents = [
+            f"{p.get('title') or ''} {p.get('content') or ''} {' '.join(p.get('tags') or [])}".strip()
+            for p in all_posts
+        ]
+        
+        pass_flags, _ = apply_rules_to_contents(
+            matcher, post_contents, match_result.matched_rules, match_result.gap_rules
+        )
+        
+        passed_posts = [p for p, flag in zip(all_posts, pass_flags) if flag]
+        stats["l2_passed_posts"] = len(passed_posts)
+        perf["layer2"] = time.time() - t0
+        
+        print(f"  ✅ Layer-2 完成: {stats['l2_passed_posts']}/{stats['l1_total_posts']} 通过 ({perf['layer2']:.2f}s)\n")
+        
+        if stats["l2_passed_posts"] == 0:
+            perf["total"] = time.time() - start_time
+            return CompleteFilterResponse(
+                query=request.query,
+                session_id=session_id,
+                stats=stats,
+                posts=[],
+                performance=perf,
+                metadata={"early_stop": "layer2", "scenario": match_result.detected_scenario}
+            )
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 3: Layer-3 语义相关性过滤
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"🤖 Step 3: Layer-3 LLM 语义过滤...")
+        
+        relevance_map = {
+            "high": RelevanceLevel.HIGH,
+            "medium": RelevanceLevel.MEDIUM,
+            "low": RelevanceLevel.LOW,
+        }
+        min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
+        
+        post_texts = [
+            f"{p.get('title') or ''} {p.get('content') or ''}".strip()
+            for p in passed_posts
+        ]
+        
+        rel_result = sf.relevance_filter.filter_by_relevance(
+            query=request.query,
+            texts=post_texts,
+            min_relevance=min_rel,
+            use_llm_for_uncertain=True,
+            llm_only=request.llm_only,
+        )
+        
+        relevance_order = {
+            RelevanceLevel.HIGH: 3,
+            RelevanceLevel.MEDIUM: 2,
+            RelevanceLevel.LOW: 1,
+            RelevanceLevel.IRRELEVANT: 0,
+        }
+        min_order = relevance_order[min_rel]
+        
+        valid_posts_with_score = []
+        valid_post_ids = []
+        
+        for post, res_dict in zip(passed_posts, rel_result["results"]):
+            score = float(res_dict.get("score", 0.0))
+            level_str = res_dict.get("relevance", "irrelevant")
+            level = RelevanceLevel(level_str) if level_str in [e.value for e in RelevanceLevel] else RelevanceLevel.IRRELEVANT
+            
+            if relevance_order[level] >= min_order:
+                # 可选：按 min_score 过滤
+                if request.min_score is None or score >= request.min_score:
+                    post_with_score = {
+                        **post,
+                        "relevance_score": round(score, 3),
+                        "relevance_level": level_str,
+                    }
+                    valid_posts_with_score.append(post_with_score)
+                    valid_post_ids.append(post["id"])
+        
+        stats["l3_passed_posts"] = len(valid_posts_with_score)
+        perf["layer3"] = time.time() - t0
+        
+        print(f"  ✅ Layer-3 完成: {stats['l3_passed_posts']}/{stats['l2_passed_posts']} 通过 ({perf['layer3']:.2f}s)\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 4: 读取评论（可选）
+        # ═══════════════════════════════════════════════════════
+        if request.include_comments and valid_post_ids:
+            t0 = time.time()
+            print(f"💬 Step 4: 读取评论...")
+            
+            all_comments = []
+            batch_size = 100
+            for i in range(0, len(valid_post_ids), batch_size):
+                chunk_ids = valid_post_ids[i:i + batch_size]
+                resp = supabase.table("filtered_comments").select("*").in_("content_id", chunk_ids).execute()
+                all_comments.extend(resp.data or [])
+            
+            # 按 content_id 分组
+            comments_by_post = {}
+            for comment in all_comments:
+                content_id = comment.get("content_id")
+                if content_id not in comments_by_post:
+                    comments_by_post[content_id] = []
+                comments_by_post[content_id].append(comment)
+            
+            # 添加评论到帖子
+            for post in valid_posts_with_score:
+                post["comments"] = comments_by_post.get(post["id"], [])
+            
+            fetch_time = time.time() - t0
+            perf["fetch_results"] = fetch_time
+            print(f"  ✅ 读取 {len(all_comments)} 条评论 ({fetch_time:.2f}s)\n")
+        else:
+            for post in valid_posts_with_score:
+                post["comments"] = []
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 5: 按相关性分数排序并限制返回数量
+        # ═══════════════════════════════════════════════════════
+        valid_posts_with_score.sort(key=lambda x: x.get("relevance_score", 0.0), reverse=True)
+        final_posts = valid_posts_with_score[:request.limit]
+        stats["final_returned"] = len(final_posts)
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 6: 保存 Session（可选）
+        # ═══════════════════════════════════════════════════════
+        if request.save_session:
+            t0 = time.time()
+            print(f"💾 Step 6: 保存 Session 到数据库...")
+            
+            try:
+                # 保存 Session 元数据
+                metadata_row = {
+                    "session_id": session_id,
+                    "query": request.query,
+                    "scenario": match_result.detected_scenario,
+                    "l1_total_posts": stats["l1_total_posts"],
+                    "l2_passed_posts": stats["l2_passed_posts"],
+                    "l3_passed_posts": stats["l3_passed_posts"],
+                    "created_at": datetime.now(timezone.utc).isoformat(),
+                }
+                supabase.table("session_metadata").insert(metadata_row).execute()
+                
+                # 保存 Layer-2 结果
+                if passed_posts:
+                    l2_rows = []
+                    for post in passed_posts:
+                        l2_rows.append({
+                            "session_id": session_id,
+                            "post_id": post["id"],
+                            "title": post.get("title"),
+                            "content": post.get("content"),
+                            "platform": post.get("platform"),
+                        })
+                    
+                    # 批量插入
+                    batch_size = 100
+                    for i in range(0, len(l2_rows), batch_size):
+                        chunk = l2_rows[i:i + batch_size]
+                        supabase.table("session_l2_results").insert(chunk).execute()
+                
+                # 保存 Layer-3 结果
+                if valid_posts_with_score:
+                    l3_rows = []
+                    for post in valid_posts_with_score:
+                        l3_rows.append({
+                            "session_id": session_id,
+                            "post_id": post["id"],
+                            "relevance_score": post["relevance_score"],
+                            "relevance_level": post["relevance_level"],
+                        })
+                    
+                    # 批量插入
+                    for i in range(0, len(l3_rows), batch_size):
+                        chunk = l3_rows[i:i + batch_size]
+                        supabase.table("session_l3_results").insert(chunk).execute()
+                
+                save_time = time.time() - t0
+                print(f"  ✅ Session 已保存 ({save_time:.2f}s)")
+                print(f"     - session_metadata: 1 条")
+                print(f"     - session_l2_results: {len(passed_posts)} 条")
+                print(f"     - session_l3_results: {len(valid_posts_with_score)} 条\n")
+                
+            except Exception as e:
+                print(f"  ⚠️  保存 Session 失败: {e}")
+                # 不影响主流程，继续返回结果
+        
+        perf["total"] = time.time() - start_time
+        
+        print(f"{'='*80}")
+        print(f"✅ 一站式过滤完成")
+        print(f"  L1 总数: {stats['l1_total_posts']}")
+        print(f"  L2 通过: {stats['l2_passed_posts']} ({stats['l2_passed_posts']/stats['l1_total_posts']*100:.1f}%)")
+        print(f"  L3 通过: {stats['l3_passed_posts']} ({stats['l3_passed_posts']/stats['l1_total_posts']*100:.1f}%)")
+        print(f"  最终返回: {stats['final_returned']} 条")
+        print(f"  总耗时: {perf['total']:.2f}s")
+        if request.save_session:
+            print(f"  Session 已保存: {session_id}")
+        print(f"{'='*80}\n")
+        
+        return CompleteFilterResponse(
+            query=request.query,
+            session_id=session_id,
+            stats=stats,
+            posts=final_posts,
+            performance=perf,
+            metadata={
+                "scenario": match_result.detected_scenario,
+                "min_relevance": request.min_relevance,
+                "platform": request.platform,
+                "session_saved": request.save_session,
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"\n❌ 一站式过滤出错: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Complete filter failed: {str(e)}")
+
+
+# ==================== 端到端自动过滤 API ====================
+
+class AutoFilterRequest(BaseModel):
+    """端到端自动过滤请求（从数据库读取）"""
+    query: str = Field(..., description="用户查询，如'丽江旅游攻略'")
+    
+    # 数据源控制
+    platform: Optional[str] = Field(None, description="平台过滤（xhs/weibo），不填则全平台")
+    max_posts: int = Field(50000, ge=10, le=2000, description="最多处理帖子数")
+    max_comments_per_post: int = Field(50, ge=0, le=200, description="每个帖子最多处理评论数")
+    
+    # Layer-2 控制
+    force_scenario: Optional[str] = Field(None, description="强制指定场景")
+    save_gap_rules: bool = Field(False, description="保存 LLM 生成的补充规则")
+    
+    # Layer-3 控制
+    min_relevance: str = Field("medium", description="最低相关性: high/medium/low")
+    llm_only: bool = Field(True, description="Layer-3 完全依赖 LLM")
+    
+    # Session 控制
+    session_id: Optional[str] = Field(None, description="指定 Session ID（可选）")
+    auto_save: bool = Field(True, description="自动保存到 session 临时表")
+
+
+class AutoFilterResponse(BaseModel):
+    """端到端自动过滤响应"""
+    session_id: str
+    query: str
+    
+    # 数据统计
+    stats: dict = Field(..., description="各层统计")
+    
+    # 性能信息
+    performance: dict = Field(..., description="各层耗时")
+    
+    # 数据访问
+    access: dict = Field(..., description="数据访问方式")
+    
+    # 元数据
+    metadata: dict = Field(default_factory=dict)
+
+
+@app.post("/api/filter/auto", response_model=AutoFilterResponse, tags=["端到端过滤"])
+async def auto_filter(request: AutoFilterRequest):
+    """
+    🤖 端到端自动过滤（从数据库读取数据）
+    
+    **核心特性**:
+    - 只需输入 query，自动从数据库读取数据
+    - 自动执行 Layer-1 → Layer-2 → Layer-3
+    - 结果保存到 Session 临时表
+    - 返回 API 访问地址
+    
+    **处理流程**:
+    1. 从 `filtered_posts` 读取 Layer-1 已过滤数据
+    2. 执行 Layer-2 场景规则过滤 → 写入 `session_l2_posts`
+    3. 从 `filtered_comments` 读取有效帖子的评论 → 写入 `session_l2_comments`
+    4. 执行 Layer-3 语义相关性过滤 → 写入 `session_l3_results`
+    5. 更新 `session_metadata`
+    
+    **使用示例**:
+    ```bash
+    curl -X POST "http://localhost:8081/api/filter/auto" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "query": "丽江旅游攻略",
+        "platform": "xhs",
+        "max_posts": 500
+      }'
+    ```
+    
+    **返回格式**:
+    ```json
+    {
+      "session_id": "sess_20260410_123456_abcd",
+      "query": "丽江旅游攻略",
+      "stats": {
+        "l1_total_posts": 500,
+        "l2_passed_posts": 234,
+        "l3_passed_posts": 89
+      },
+      "performance": {
+        "total": 45.6
+      },
+      "access": {
+        "api_url": "/api/sessions/sess_xxx/results",
+        "web_url": "http://localhost:8081/api/sessions/sess_xxx/results"
+      }
+    }
+    ```
+    
+    **Agent 调用**:
+    ```python
+    # Step 1: 启动过滤任务
+    response = requests.post(
+        "http://localhost:8081/api/filter/auto",
+        json={"query": "丽江旅游攻略", "platform": "xhs"}
+    )
+    session_id = response.json()["session_id"]
+    
+    # Step 2: 获取过滤结果
+    results = requests.get(
+        f"http://localhost:8081/api/sessions/{session_id}/results"
+    ).json()
+    ```
+    """
+    import time
+    import uuid
+    from datetime import datetime, timezone
+    
+    start_time = time.time()
+    session_id = request.session_id or f"sess_{datetime.now().strftime('%Y%m%d_%H%M%S')}_{str(uuid.uuid4())[:8]}"
+    
+    perf = {"layer1": 0.0, "layer2": 0.0, "layer3": 0.0, "total": 0.0}
+    stats = {
+        "l1_total_posts": 0,
+        "l1_total_comments": 0,
+        "l2_passed_posts": 0,
+        "l2_passed_comments": 0,
+        "l3_passed_posts": 0,
+    }
+    
+    try:
+        # 初始化 Supabase
+        supabase = get_supabase()
+        matcher = get_smart_matcher()
+        sf = get_smart_filter()
+        
+        print(f"\n{'='*80}")
+        print(f"🤖 端到端自动过滤")
+        print(f"{'='*80}")
+        print(f"🆔 Session ID: {session_id}")
+        print(f"🔍 Query: {request.query}")
+        print(f"📱 Platform: {request.platform or '全平台'}")
+        print(f"📊 Max Posts: {request.max_posts}")
+        print(f"{'='*80}\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 1: 从 filtered_posts 读取 Layer-1 数据
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"📖 Step 1: 读取 Layer-1 已过滤帖子...")
+        
+        query_builder = supabase.table("filtered_posts").select("*")
+        if request.platform:
+            query_builder = query_builder.eq("platform", request.platform)
+        
+        # 分页读取（避免超时）
+        all_posts = []
+        page_size = 1000
+        offset = 0
+        
+        while len(all_posts) < request.max_posts:
+            resp = query_builder.range(offset, offset + page_size - 1).execute()
+            data = resp.data or []
+            if not data:
+                break
+            all_posts.extend(data)
+            offset += page_size
+            if len(data) < page_size:
+                break
+        
+        all_posts = all_posts[:request.max_posts]
+        stats["l1_total_posts"] = len(all_posts)
+        perf["layer1"] = time.time() - t0
+        
+        print(f"  ✅ 读取 {stats['l1_total_posts']} 条帖子 ({perf['layer1']:.2f}s)\n")
+        
+        if stats["l1_total_posts"] == 0:
+            raise HTTPException(
+                status_code=404,
+                detail="No posts found in filtered_posts table. Please run Layer-1 filter first."
+            )
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 2: Layer-2 场景规则过滤（帖子）
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"🎯 Step 2: Layer-2 场景规则过滤...")
+        
+        # LLM 分析
+        match_result = await matcher.match(request.query, force_scenario=request.force_scenario)
+        
+        print(f"  场景: {match_result.detected_scenario}")
+        print(f"  已有规则: {len(match_result.matched_rules)} 条")
+        print(f"  补充规则: {len(match_result.gap_rules)} 条")
+        
+        # 应用规则
+        post_contents = [
+            f"{p.get('title') or ''} {p.get('content') or ''} {' '.join(p.get('tags') or [])}".strip()
+            for p in all_posts
+        ]
+        
+        pass_flags, rule_stats = apply_rules_to_contents(
+            matcher, post_contents, match_result.matched_rules, match_result.gap_rules
+        )
+        
+        passed_posts = [p for p, flag in zip(all_posts, pass_flags) if flag]
+        stats["l2_passed_posts"] = len(passed_posts)
+        
+        # 保存补充规则（可选）
+        if request.save_gap_rules and match_result.suggest_save:
+            saved = matcher.save_suggested_rules(match_result.suggest_save)
+            print(f"  💾 已保存 {len(saved)} 条补充规则")
+        
+        perf["layer2"] = time.time() - t0
+        print(f"  ✅ Layer-2 完成: {stats['l2_passed_posts']}/{stats['l1_total_posts']} 通过 "
+              f"({perf['layer2']:.2f}s)\n")
+        
+        # 写入 session_l2_posts
+        if request.auto_save and passed_posts:
+            print(f"💾 写入 session_l2_posts...")
+            matched_rule_names = [r.rule_name for r in match_result.matched_rules]
+            gap_rule_names = [g.name for g in match_result.gap_rules]
+            all_rule_names = matched_rule_names + gap_rule_names
+            
+            import hashlib
+            rows = []
+            for post in passed_posts:
+                original_id = str(post.get('id', ''))
+                hash_prefix = hashlib.md5(f"{session_id}_{original_id}".encode()).hexdigest()[:16]
+                unique_id = f"{hash_prefix}_{original_id[-8:]}"
+                
+                rows.append({
+                    "id": unique_id,
+                    "session_id": session_id,
+                    "platform": post.get("platform", "xhs"),
+                    "type": post.get("type"),
+                    "url": post.get("url"),
+                    "title": post.get("title"),
+                    "content": post.get("content"),
+                    "publish_time": post.get("publish_time"),
+                    "author_id": post.get("author_id"),
+                    "author_nickname": post.get("author_nickname"),
+                    "metrics_likes": post.get("metrics_likes", 0),
+                    "metrics_comments": post.get("metrics_comments", 0),
+                    "tags": post.get("tags"),
+                    "scene_matched_rules": json.dumps(all_rule_names, ensure_ascii=False),
+                })
+            
+            # 分批插入
+            batch_size = 50
+            for i in range(0, len(rows), batch_size):
+                batch = rows[i:i + batch_size]
+                supabase.table("session_l2_posts").insert(batch).execute()
+            print(f"  ✅ 已写入 {len(rows)} 条\n")
+        
+        if stats["l2_passed_posts"] == 0:
+            # 更新元数据并返回
+            if request.auto_save:
+                supabase.table("session_metadata").insert({
+                    "session_id": session_id,
+                    "query_text": request.query,
+                    "l1_total_posts": stats["l1_total_posts"],
+                    "l1_total_comments": 0,
+                    "l2_passed_posts": 0,
+                    "l2_passed_comments": 0,
+                    "l3_passed_posts": 0,
+                    "status": "completed",
+                }).execute()
+            
+            perf["total"] = time.time() - start_time
+            return AutoFilterResponse(
+                session_id=session_id,
+                query=request.query,
+                stats=stats,
+                performance=perf,
+                access={
+                    "api_url": f"/api/sessions/{session_id}/results",
+                    "message": "No posts passed Layer-2"
+                },
+                metadata={"early_stop": "layer2", "scenario": match_result.detected_scenario}
+            )
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 3: 读取评论（仅有效帖子的评论）
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"💬 Step 3: 读取有效帖子的评论...")
+        
+        valid_post_ids = [p["id"] for p in passed_posts]
+        all_comments = []
+        
+        # 分批查询评论
+        batch_size = 100
+        for i in range(0, len(valid_post_ids), batch_size):
+            chunk_ids = valid_post_ids[i:i + batch_size]
+            resp = supabase.table("filtered_comments").select("*").in_("content_id", chunk_ids).execute()
+            all_comments.extend(resp.data or [])
+        
+        stats["l1_total_comments"] = len(all_comments)
+        print(f"  ✅ 读取 {stats['l1_total_comments']} 条评论 ({time.time() - t0:.2f}s)\n")
+        
+        # 复用 Layer-2 规则过滤评论
+        if all_comments:
+            print(f"🎯 Step 4: Layer-2 过滤评论（复用规则）...")
+            comment_contents = [c.get("content", "") for c in all_comments]
+            comment_pass_flags, _ = apply_rules_to_contents(
+                matcher, comment_contents, match_result.matched_rules, match_result.gap_rules
+            )
+            passed_comments = [c for c, flag in zip(all_comments, comment_pass_flags) if flag]
+            stats["l2_passed_comments"] = len(passed_comments)
+            print(f"  ✅ 评论通过: {stats['l2_passed_comments']}/{stats['l1_total_comments']}\n")
+            
+            # 写入 session_l2_comments
+            if request.auto_save and passed_comments:
+                print(f"💾 写入 session_l2_comments...")
+                rows = []
+                for comment in passed_comments:
+                    original_id = str(comment.get('id', ''))
+                    hash_prefix = hashlib.md5(f"{session_id}_{original_id}".encode()).hexdigest()[:16]
+                    unique_id = f"{hash_prefix}_{original_id[-8:]}"
+                    
+                    rows.append({
+                        "id": unique_id,
+                        "session_id": session_id,
+                        "content_id": comment.get("content_id"),
+                        "platform": comment.get("platform", "xhs"),
+                        "content": comment.get("content"),
+                        "publish_time": comment.get("publish_time"),
+                        "author_id": comment.get("author_id"),
+                        "author_nickname": comment.get("author_nickname"),
+                        "metrics_likes": comment.get("metrics_likes", 0),
+                        "scene_matched_rules": json.dumps(all_rule_names, ensure_ascii=False),
+                    })
+                
+                for i in range(0, len(rows), 50):
+                    batch = rows[i:i + 50]
+                    supabase.table("session_l2_comments").insert(batch).execute()
+                print(f"  ✅ 已写入 {len(rows)} 条\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 5: Layer-3 语义相关性过滤
+        # ═══════════════════════════════════════════════════════
+        t0 = time.time()
+        print(f"🤖 Step 5: Layer-3 LLM 语义过滤...")
+        
+        relevance_map = {
+            "high": RelevanceLevel.HIGH,
+            "medium": RelevanceLevel.MEDIUM,
+            "low": RelevanceLevel.LOW,
+        }
+        min_rel = relevance_map.get(request.min_relevance, RelevanceLevel.MEDIUM)
+        
+        # 批量相关性判断
+        post_texts = [
+            f"{p.get('title') or ''} {p.get('content') or ''}".strip()
+            for p in passed_posts
+        ]
+        
+        rel_result = sf.relevance_filter.filter_by_relevance(
+            query=request.query,
+            texts=post_texts,
+            min_relevance=min_rel,
+            use_llm_for_uncertain=True,
+            llm_only=request.llm_only,
+        )
+        
+        relevance_order = {
+            RelevanceLevel.HIGH: 3,
+            RelevanceLevel.MEDIUM: 2,
+            RelevanceLevel.LOW: 1,
+            RelevanceLevel.IRRELEVANT: 0,
+        }
+        min_order = relevance_order[min_rel]
+        
+        valid_posts_with_score = []
+        valid_post_ids_l3 = []
+        
+        for post, res_dict in zip(passed_posts, rel_result["results"]):
+            score = float(res_dict.get("score", 0.0))
+            level_str = res_dict.get("relevance", "irrelevant")
+            level = RelevanceLevel(level_str) if level_str in [e.value for e in RelevanceLevel] else RelevanceLevel.IRRELEVANT
+            
+            if relevance_order[level] >= min_order:
+                post_with_score = {
+                    **post,
+                    "relevance_score": round(score, 3),
+                    "relevance_level": level_str,
+                }
+                valid_posts_with_score.append(post_with_score)
+                valid_post_ids_l3.append(post["id"])
+        
+        stats["l3_passed_posts"] = len(valid_posts_with_score)
+        perf["layer3"] = time.time() - t0
+        
+        print(f"  ✅ Layer-3 完成: {stats['l3_passed_posts']}/{stats['l2_passed_posts']} 通过 "
+              f"({perf['layer3']:.2f}s)\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 6: 构建帖子+评论嵌套结构并写入 session_l3_results
+        # ═══════════════════════════════════════════════════════
+        if request.auto_save and valid_posts_with_score:
+            print(f"💾 Step 6: 写入 session_l3_results...")
+            
+            # 按 content_id 分组评论
+            comments_by_post = {}
+            if all_comments:
+                for comment in passed_comments if 'passed_comments' in locals() else []:
+                    content_id = comment.get("content_id")
+                    if content_id in valid_post_ids_l3:
+                        if content_id not in comments_by_post:
+                            comments_by_post[content_id] = []
+                        comments_by_post[content_id].append(comment)
+            
+            # 构建最终结果
+            rows = []
+            for post in valid_posts_with_score:
+                post_id = post["id"]
+                comments = comments_by_post.get(post_id, [])
+                
+                rows.append({
+                    "session_id": session_id,
+                    "post_id": post_id,
+                    "post_data": post,
+                    "comments": comments,
+                    "comment_count": len(comments),
+                    "query_text": request.query,
+                })
+            
+            # 批量 upsert
+            for i in range(0, len(rows), 50):
+                batch = rows[i:i + 50]
+                supabase.table("session_l3_results").upsert(batch).execute()
+            
+            print(f"  ✅ 已写入 {len(rows)} 条帖子+评论记录\n")
+        
+        # ═══════════════════════════════════════════════════════
+        # Step 7: 更新 session_metadata
+        # ═══════════════════════════════════════════════════════
+        if request.auto_save:
+            supabase.table("session_metadata").insert({
+                "session_id": session_id,
+                "query_text": request.query,
+                "l1_total_posts": stats["l1_total_posts"],
+                "l1_total_comments": stats["l1_total_comments"],
+                "l2_passed_posts": stats["l2_passed_posts"],
+                "l2_passed_comments": stats["l2_passed_comments"],
+                "l3_passed_posts": stats["l3_passed_posts"],
+                "status": "completed",
+                "completed_at": datetime.now(timezone.utc).isoformat(),
+            }).execute()
+        
+        perf["total"] = time.time() - start_time
+        
+        print(f"{'='*80}")
+        print(f"✅ 端到端过滤完成")
+        print(f"  L1 总帖子: {stats['l1_total_posts']}")
+        print(f"  L2 通过: {stats['l2_passed_posts']} 帖子 + {stats['l2_passed_comments']} 评论")
+        print(f"  L3 通过: {stats['l3_passed_posts']} 帖子")
+        print(f"  总耗时: {perf['total']:.2f}s")
+        print(f"{'='*80}\n")
+        
+        return AutoFilterResponse(
+            session_id=session_id,
+            query=request.query,
+            stats=stats,
+            performance=perf,
+            access={
+                "api_url": f"/api/sessions/{session_id}/results",
+                "web_url": f"http://localhost:8081/api/sessions/{session_id}/results",
+                "metadata_url": f"/api/sessions/{session_id}/metadata",
+            },
+            metadata={
+                "scenario": match_result.detected_scenario,
+                "min_relevance": request.min_relevance,
+                "platform": request.platform,
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        print(f"\n❌ 自动过滤出错: {e}")
+        print(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Auto filter failed: {str(e)}")
+
+
+# ==================== 三层过滤流水线 (原版，保留兼容) ====================
 
 @app.post("/api/pipeline/run", tags=["三层流水线"])
 async def run_pipeline(request: PipelineRequest):
@@ -1056,6 +2432,295 @@ async def index():
 </body>
 </html>
     """)
+
+
+# ==================== Session 数据查询接口 ====================
+
+class SessionMetadata(BaseModel):
+    """Session 元数据"""
+    session_id: str
+    query_text: str
+    l1_total_posts: int
+    l1_total_comments: int
+    l2_passed_posts: int
+    l2_passed_comments: int
+    l3_passed_posts: int
+    status: str
+    created_at: str
+    completed_at: Optional[str] = None
+
+
+class SessionPostData(BaseModel):
+    """Session 帖子数据（简化版）"""
+    post_id: str
+    title: Optional[str] = None
+    content: str
+    platform: str
+    author_nickname: Optional[str] = None
+    publish_time: Optional[str] = None
+    relevance_score: Optional[float] = None
+    relevance_level: Optional[str] = None
+    metrics_likes: Optional[int] = 0
+    metrics_comments: Optional[int] = 0
+    url: Optional[str] = None
+    tags: Optional[List[str]] = None
+
+
+class SessionResult(BaseModel):
+    """完整 Session 结果（包含帖子和评论）"""
+    post: SessionPostData
+    comments: List[dict]
+    comment_count: int
+
+
+class SessionResponse(BaseModel):
+    """Session 查询响应"""
+    session_id: str
+    query_text: str
+    total_results: int
+    results: List[SessionResult]
+    metadata: SessionMetadata
+
+
+# Supabase 配置
+SUPABASE_URL = "https://rynxtsbrwvexytmztcyh.supabase.co"
+SUPABASE_KEY = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
+    ".eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJ5bnh0c2Jyd3ZleHl0bXp0Y3loIiwicm9sZSI6"
+    "ImFub24iLCJpYXQiOjE3Njc4NTA5ODUsImV4cCI6MjA4MzQyNjk4NX0"
+    ".0AGziOeTUQjv1cpaCfNCBST3xz97VxkMs_ggzaxthgo"
+)
+
+try:
+    from supabase import create_client, Client
+    _supabase_client: Optional[Client] = None
+    
+    def get_supabase() -> Client:
+        global _supabase_client
+        if _supabase_client is None:
+            _supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        return _supabase_client
+except ImportError:
+    def get_supabase():
+        raise HTTPException(status_code=500, detail="Supabase client not installed. Run: pip install supabase")
+
+
+@app.get("/api/sessions/{session_id}/metadata", response_model=SessionMetadata, tags=["Session Data"])
+async def get_session_metadata(session_id: str):
+    """
+    获取 Session 元数据
+    
+    **用途**: 查看过滤任务的统计信息
+    
+    **示例**:
+    ```
+    GET /api/sessions/sess_abc123/metadata
+    ```
+    """
+    try:
+        supabase = get_supabase()
+        resp = supabase.table("session_metadata").select("*").eq("session_id", session_id).execute()
+        
+        if not resp.data or len(resp.data) == 0:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+        
+        return resp.data[0]
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/sessions/{session_id}/results", response_model=SessionResponse, tags=["Session Data"])
+async def get_session_results(
+    session_id: str,
+    limit: int = Query(100, ge=1, le=1000, description="返回结果数量限制"),
+    offset: int = Query(0, ge=0, description="偏移量（分页）"),
+    min_score: Optional[float] = Query(None, ge=0.0, le=1.0, description="最低相关性分数过滤"),
+):
+    """
+    获取 Session 的 Layer-3 过滤结果（帖子+评论）
+    
+    **用途**: Agent 获取最终过滤好的数据
+    
+    **参数**:
+    - `session_id`: Session ID（由过滤脚本生成）
+    - `limit`: 返回结果数量（默认100，最大1000）
+    - `offset`: 分页偏移量（默认0）
+    - `min_score`: 最低相关性分数（可选，0.0-1.0）
+    
+    **示例**:
+    ```
+    GET /api/sessions/sess_abc123/results?limit=50&min_score=0.7
+    ```
+    
+    **返回格式**:
+    ```json
+    {
+        "session_id": "sess_abc123",
+        "query_text": "丽江旅游景点推荐",
+        "total_results": 45,
+        "results": [
+            {
+                "post": {
+                    "post_id": "xxx",
+                    "title": "丽江古城深度游攻略",
+                    "content": "...",
+                    "relevance_score": 0.92,
+                    "relevance_level": "high",
+                    ...
+                },
+                "comments": [{...}, {...}],
+                "comment_count": 15
+            }
+        ],
+        "metadata": {...}
+    }
+    ```
+    """
+    try:
+        supabase = get_supabase()
+        
+        # 1. 获取元数据
+        meta_resp = supabase.table("session_metadata").select("*").eq("session_id", session_id).execute()
+        if not meta_resp.data or len(meta_resp.data) == 0:
+            raise HTTPException(status_code=404, detail=f"Session '{session_id}' not found")
+        
+        metadata = meta_resp.data[0]
+        
+        # 2. 查询 Layer-3 结果（不使用数据库排序，改为 Python 排序）
+        # 注意：由于 Supabase 不支持 JSON 字段的类型转换排序，我们在 Python 端处理
+        
+        # 先获取所有数据（如果数据量大，可以考虑增加 limit 参数或分批获取）
+        query = supabase.table("session_l3_results") \
+            .select("*") \
+            .eq("session_id", session_id)
+        
+        resp = query.execute()
+        all_results = resp.data or []
+        
+        # 3. 在 Python 中过滤和排序
+        # 过滤低分结果（可选）
+        if min_score is not None:
+            all_results = [
+                r for r in all_results
+                if r.get("post_data", {}).get("relevance_score", 0.0) >= min_score
+            ]
+        
+        # 按相关性分数排序（降序）
+        all_results.sort(
+            key=lambda x: x.get("post_data", {}).get("relevance_score", 0.0),
+            reverse=True
+        )
+        
+        # 应用分页
+        raw_results = all_results[offset:offset + limit]
+        
+        # 4. 格式化返回数据
+        results = []
+        for item in raw_results:
+            post_data = item.get("post_data", {})
+            
+            # 构建 SessionPostData
+            post = SessionPostData(
+                post_id=item["post_id"],
+                title=post_data.get("title"),
+                content=post_data.get("content", ""),
+                platform=post_data.get("platform", "xhs"),
+                author_nickname=post_data.get("author_nickname"),
+                publish_time=post_data.get("publish_time"),
+                relevance_score=post_data.get("relevance_score"),
+                relevance_level=post_data.get("relevance_level"),
+                metrics_likes=post_data.get("metrics_likes", 0),
+                metrics_comments=post_data.get("metrics_comments", 0),
+                url=post_data.get("url"),
+                tags=post_data.get("tags"),
+            )
+            
+            results.append(SessionResult(
+                post=post,
+                comments=item.get("comments", []),
+                comment_count=item.get("comment_count", 0),
+            ))
+        
+        return SessionResponse(
+            session_id=session_id,
+            query_text=metadata.get("query_text", ""),
+            total_results=len(results),
+            results=results,
+            metadata=SessionMetadata(**metadata),
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.get("/api/sessions", tags=["Session Data"])
+async def list_sessions(
+    limit: int = Query(20, ge=1, le=100, description="返回数量"),
+    status: Optional[str] = Query(None, description="过滤状态: completed/processing/failed"),
+):
+    """
+    列出所有 Session
+    
+    **用途**: 查看所有过滤任务
+    
+    **示例**:
+    ```
+    GET /api/sessions?limit=10&status=completed
+    ```
+    """
+    try:
+        supabase = get_supabase()
+        
+        query = supabase.table("session_metadata").select("*").limit(limit)
+        
+        if status:
+            query = query.eq("status", status)
+        
+        query = query.order("created_at", desc=True)
+        
+        resp = query.execute()
+        return {
+            "total": len(resp.data or []),
+            "sessions": resp.data or [],
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+
+
+@app.delete("/api/sessions/{session_id}", tags=["Session Data"])
+async def delete_session(session_id: str):
+    """
+    删除 Session 及其所有数据
+    
+    **警告**: 此操作不可逆！
+    
+    **示例**:
+    ```
+    DELETE /api/sessions/sess_abc123
+    ```
+    """
+    try:
+        supabase = get_supabase()
+        
+        # 删除 L2 数据
+        supabase.table("session_l2_posts").delete().eq("session_id", session_id).execute()
+        supabase.table("session_l2_comments").delete().eq("session_id", session_id).execute()
+        
+        # 删除 L3 数据
+        supabase.table("session_l3_results").delete().eq("session_id", session_id).execute()
+        
+        # 删除元数据
+        supabase.table("session_metadata").delete().eq("session_id", session_id).execute()
+        
+        return {"message": f"Session '{session_id}' deleted successfully"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Delete failed: {str(e)}")
 
 
 # ==================== 主入口 ====================
