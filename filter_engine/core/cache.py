@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：FilterCache 为旧管道提供 LRU + TTL 缓存，新架构不使用此缓存
+#       （L2/L3 的 LLM 调用耗时以 Supabase session 表持久化替代）。
+#       仅被 pipeline.py（遗留）和 dynamic_pipeline.py（遗留）使用。
+#       删除条件：随 pipeline.py + dynamic_pipeline.py 一起删除即可。
 """
 过滤结果缓存
 支持相似文本去重和LRU缓存策略

@@ -1,4 +1,8 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：这是 FilterPipeline 的 CLI 命令行入口，随 pipeline.py 一起被废弃。
+#       当前系统通过 uvicorn 启动 FastAPI，不再需要 CLI 入口。
+#       删除条件：确认无人通过命令行调用 `python -m filter_engine` 后可安全删除。
 """过滤引擎CLI入口"""
 import json
 import argparse

@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：RuleSelector 按 tags/category 从 SQLite 本地库选取规则，
+#       现在 SmartRuleMatcher 按场景从 Supabase 动态加载规则，此文件完全冗余。
+#       仅被 dynamic_pipeline.py 使用。
+#       删除条件：随 dynamic_pipeline.py 一起删除即可。
 """
 动态规则选择器
 根据查询意图动态选择适用的规则集合

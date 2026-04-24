@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：QueryAnalyzer 通过关键词匹配猜测"场景"（电商/社交/金融...），
+#       现在 SmartRuleMatcher 直接用 LLM 识别场景，精度更高，此文件完全冗余。
+#       仅被 dynamic_pipeline.py 和 /api/query/analyze 端点使用。
+#       删除条件：随 dynamic_pipeline.py 一起删除即可。
 """
 查询意图分析器
 分析用户查询意图，确定过滤场景和规则选择策略

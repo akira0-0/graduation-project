@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：FilterPipeline 是项目初期的两层过滤方案（规则引擎 + LLM 直判），
+#       现已被新的三层系统（SmartRuleMatcher L2 + SmartDataFilter L3）取代。
+#       当前仅剩 /api/filter（单条）和 /api/filter/batch（批量）两个老接口在使用，
+#       这两个接口本身也是遗留接口（见 api.py 中的 deprecated 标记）。
+#       删除条件：确认 /api/filter 和 /api/filter/batch 不再被任何客户端调用后可安全删除。
 """
 过滤管道
 整合规则引擎、LLM引擎和协同决策

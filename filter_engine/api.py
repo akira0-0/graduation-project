@@ -266,18 +266,18 @@ async def test_rule(rule_id: int, text: str):
     }
 
 
-# ==================== 过滤API ====================
+# ==================== 过滤API（遗留，待删除）====================
 
-@app.post("/api/filter", tags=["过滤"])
+@app.post("/api/filter", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_text(request: FilterRequest):
-    """过滤单条文本"""
+    """[DEPRECATED] 过滤单条文本 — 使用 FilterPipeline（旧方案），请改用 /api/filter/complete"""
     result = pipeline.filter_text(request.text, use_llm=request.use_llm)
     return result.model_dump()
 
 
-@app.post("/api/filter/batch", tags=["过滤"])
+@app.post("/api/filter/batch", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_batch(request: BatchFilterRequest):
-    """批量过滤"""
+    """[DEPRECATED] 批量过滤 — 使用 FilterPipeline（旧方案），请改用 /api/filter/auto"""
     results = pipeline.filter_and_split(
         request.items,
         content_field=request.content_field,
@@ -286,13 +286,13 @@ async def filter_batch(request: BatchFilterRequest):
     return results
 
 
-# ==================== 动态过滤API ====================
+# ==================== 动态过滤API（遗留，待删除）====================
 
-@app.post("/api/filter/dynamic", tags=["动态过滤"])
+@app.post("/api/filter/dynamic", tags=["⚠️ 遗留接口"], deprecated=True)
 async def dynamic_filter(request: DynamicFilterRequest):
     """
-    动态过滤 - 根据查询意图自动选择规则
-    
+    [DEPRECATED] 动态过滤 — 使用 DynamicFilterPipeline（第一代动态方案），请改用 /api/filter/auto
+
     功能：
     1. 分析用户查询意图（场景、严格程度）
     2. 动态选择适用的规则集
@@ -312,11 +312,11 @@ async def dynamic_filter(request: DynamicFilterRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/query/analyze", tags=["动态过滤"])
+@app.post("/api/query/analyze", tags=["⚠️ 遗留接口"], deprecated=True)
 async def analyze_query(request: QueryAnalyzeRequest):
     """
-    分析查询意图
-    
+    [DEPRECATED] 分析查询意图 — 基于关键词匹配的场景识别，精度低于 SmartRuleMatcher
+
     返回：场景、严格程度、额外关注类别、自定义关键词
     """
     analyzer = QueryAnalyzer()
@@ -354,10 +354,10 @@ def get_smart_matcher() -> SmartRuleMatcher:
     return _smart_matcher
 
 
-@app.post("/api/filter/smart", tags=["智能筛选"])
+@app.post("/api/filter/smart", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_smart_relevance(request: RelevanceFilterRequest):
     """
-    智能数据筛选（相关性，旧接口保留兼容）
+    [DEPRECATED] 智能数据筛选（手动传入内容）— 请改用 /api/filter/complete（自动从 DB 读取）
 
     功能：
     1. 解析用户查询意图
@@ -385,10 +385,10 @@ async def filter_smart_relevance(request: RelevanceFilterRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/filter/relevance", tags=["智能筛选"])
+@app.post("/api/filter/relevance", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_by_relevance(request: RelevanceFilterRequest):
     """
-    仅按相关性筛选（不过滤垃圾）
+    [DEPRECATED] 仅按相关性筛选（手动传入内容）— 请改用 /api/filter/complete
 
     更快速，适合已清洗的数据
     """
@@ -410,10 +410,10 @@ async def filter_by_relevance(request: RelevanceFilterRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/rules/generate", tags=["动态过滤"])
+@app.post("/api/rules/generate", tags=["⚠️ 遗留接口"], deprecated=True)
 async def generate_rules(request: RuleGenerateRequest):
     """
-    根据样本文本生成过滤规则
+    [DEPRECATED] 根据样本文本生成过滤规则 — 依赖 DynamicFilterPipeline（遗留）
     
     使用LLM分析样本文本并生成适用的规则
     """
@@ -432,9 +432,9 @@ async def generate_rules(request: RuleGenerateRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/rules/generate/save", tags=["动态过滤"])
+@app.post("/api/rules/generate/save", tags=["⚠️ 遗留接口"], deprecated=True)
 async def save_generated_rule(rule_data: dict):
-    """保存生成的规则"""
+    """[DEPRECATED] 保存生成的规则 — 依赖 DynamicFilterPipeline（遗留）"""
     try:
         dp = get_dynamic_pipeline()
         
@@ -461,9 +461,9 @@ async def save_generated_rule(rule_data: dict):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.get("/api/scenarios", tags=["动态过滤"])
+@app.get("/api/scenarios", tags=["⚠️ 遗留接口"], deprecated=True)
 async def list_scenarios():
-    """获取支持的过滤场景列表"""
+    """[DEPRECATED] 获取支持的过滤场景列表 — 静态枚举，场景已由 SmartRuleMatcher 动态管理"""
     return {
         "scenarios": [
             {"value": "normal", "label": "通用场景", "description": "默认过滤规则"},
@@ -890,11 +890,11 @@ class ThreeLayerFilterResponse(BaseModel):
     metadata: dict = Field(default_factory=dict, description="额外元数据")
 
 
-@app.post("/api/filter/three-layer", response_model=ThreeLayerFilterResponse, tags=["三层流水线"])
+@app.post("/api/filter/three-layer", response_model=ThreeLayerFilterResponse, tags=["⚠️ 遗留接口"], deprecated=True)
 async def three_layer_filter(request: ThreeLayerFilterRequest):
     """
-    🚀 三层过滤 API（优化版）
-    
+    [DEPRECATED] 🚀 三层过滤（手动传入内容）— 请改用 /api/filter/complete（自动从 DB 读取）
+
     **性能优化**:
     - 批量处理减少 LLM 调用
     - 并发处理提升吞吐量
@@ -1648,12 +1648,12 @@ async def auto_filter(request: AutoFilterRequest):
         raise HTTPException(status_code=500, detail=f"Auto filter failed: {str(e)}")
 
 
-# ==================== 三层过滤流水线 (原版，保留兼容) ====================
+# ==================== 三层过滤流水线 (原版，遗留兼容) ====================
 
-@app.post("/api/pipeline/run", tags=["三层流水线"])
+@app.post("/api/pipeline/run", tags=["⚠️ 遗留接口"], deprecated=True)
 async def run_pipeline(request: PipelineRequest):
     """
-    完整三层过滤流水线
+    [DEPRECATED] 完整三层过滤流水线（手动传入内容）— 请改用 /api/filter/auto（自动从 DB 读取）
 
     Layer-1  基础规则过滤（涉黄/涉政/涉暴，通用规则，AC自动机）
       ↓  剩余未被过滤的内容

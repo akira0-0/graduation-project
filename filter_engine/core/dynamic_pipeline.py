@@ -1,4 +1,13 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：DynamicFilterPipeline 是第一代"动态规则"方案（基于 QueryAnalyzer + RuleSelector 的关键词匹配），
+#       已被 SmartRuleMatcher（llm/smart_matcher.py）完全取代。
+#       SmartRuleMatcher 用 LLM 理解场景并从 Supabase 动态加载规则，能力更强。
+#       当前剩余引用：
+#         1. /api/filter/dynamic 端点（遗留接口，已标 deprecated）
+#         2. relevance_filter.py 中的垃圾过滤（但 auto_filter 以 llm_only=True 跳过此路径）
+#       删除条件：删除 /api/filter/dynamic 端点，并将 relevance_filter.py 的垃圾过滤路径改写后可安全删除。
+#       连带删除：query_analyzer.py, rule_selector.py, decision.py, cache.py, rule_generator.py
 """
 增强版过滤管道
 集成LLM动态规则选择功能

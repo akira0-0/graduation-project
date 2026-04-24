@@ -1,4 +1,10 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：RuleGenerator 让 LLM 根据样本文本自动生成规则并写入 SQLite 本地库。
+#       现在规则存储在 Supabase，通过 /api/rules 接口手动管理，
+#       LLM 生成缺口规则的功能已集成到 SmartRuleMatcher.save_suggested_rules()。
+#       仅被 dynamic_pipeline.py（遗留）和 /api/rules/generate 端点使用。
+#       删除条件：随 dynamic_pipeline.py 一起删除，同时移除 /api/rules/generate 端点。
 """
 LLM规则生成器
 使用大模型自动生成过滤规则

@@ -1,4 +1,11 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [半必要 - 待审查能否合并]
+# 原因：LLMEngine 封装了"构建 prompt → 调用 LLM → 解析输出"的垃圾过滤流程，
+#       被 pipeline.py（遗留）、dynamic_pipeline.py（遗留）使用，
+#       同时也被 relevance_filter.py（核心，L3 相关性）直接依赖。
+#       因此不能和 pipeline.py/dynamic_pipeline.py 一起删除。
+#       优化方向：relevance_filter.py 中的 LLM 调用可直接改用 llm/client.py，
+#                 届时 engine.py + prompts.py + parser.py 才能一起移除。
 """
 LLM过滤引擎
 集成LLM客户端、提示词和解析器

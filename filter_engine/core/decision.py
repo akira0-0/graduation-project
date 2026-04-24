@@ -1,4 +1,9 @@
 # -*- coding: utf-8 -*-
+# ⚠️  [REDUNDANT - 待审查是否删除]
+# 原因：DecisionEngine 用于融合"规则引擎分数"和"LLM分数"做最终判断，
+#       这套两分法在新架构里不再使用——L2 直接按规则命中决定，L3 直接用 LLM 相关性分。
+#       仅被 pipeline.py（遗留）和 dynamic_pipeline.py（遗留）使用。
+#       删除条件：随 pipeline.py + dynamic_pipeline.py 一起删除即可。
 """
 协同决策引擎
 融合规则引擎和LLM结果，输出最终判断
