@@ -4,30 +4,14 @@
 
 功能:
 - 动态可管理的规则过滤引擎 (AC自动机 + 正则)
-- 基于LLM的语义理解过滤
-- 协同决策系统
-- LLM驱动的动态规则选择
-- 自动规则生成
-- 缓存优化
+- SmartRuleMatcher 智能场景规则匹配 (Layer-2)
+- SmartDataFilter LLM 语义相关性过滤 (Layer-3)
 
 使用示例:
-    from filter_engine import FilterPipeline
-    
-    pipeline = FilterPipeline(use_llm=True)
-    result = pipeline.filter_text("待检测的文本")
-    print(result.is_spam, result.confidence)
-    
-    # 动态规则选择
-    from filter_engine import DynamicFilterPipeline
-    
-    dynamic_pipeline = DynamicFilterPipeline(use_llm=True)
-    result = dynamic_pipeline.filter_with_query(
-        query="过滤电商评论中的广告",
-        texts=["加我微信xxx", "产品很好用"],
-    )
+    from filter_engine.api import app
+    # 通过 /api/filter/auto 或 /api/filter/complete 调用
 """
 from .config import settings, get_settings
-from .pipeline import FilterPipeline
 from .rules import (
     Rule,
     RuleCreate,
@@ -37,30 +21,14 @@ from .rules import (
     RuleManager,
     FilterResult,
 )
-from .core import (
-    RuleEngine, 
-    DecisionEngine, 
-    FilterCache,
-    DynamicFilterPipeline,
-    DynamicFilterConfig,
-    QueryAnalyzer,
-    QueryIntent,
-    FilterScenario,
-    FilterSeverity,
-    RuleSelector,
-    RuleSelectionResult,
-)
-from .llm import LLMEngine, RuleGenerator, GapAnalysis, GeneratedRule
+from .core import RuleEngine
+from .core.relevance_filter import RelevanceFilter, RelevanceLevel, SmartDataFilter
 
 __version__ = "2.1.0"
 __all__ = [
     # 配置
     "settings",
     "get_settings",
-    # 管道
-    "FilterPipeline",
-    "DynamicFilterPipeline",
-    "DynamicFilterConfig",
     # 规则
     "Rule",
     "RuleCreate",
@@ -71,19 +39,7 @@ __all__ = [
     "FilterResult",
     # 引擎
     "RuleEngine",
-    "DecisionEngine",
-    "FilterCache",
-    "LLMEngine",
-    # 动态规则选择
-    "QueryAnalyzer",
-    "QueryIntent",
-    "FilterScenario",
-    "FilterSeverity",
-    "RuleSelector",
-    "RuleSelectionResult",
-    # 规则生成
-    "RuleGenerator",
-    "GapAnalysis",
-    "GeneratedRule",
+    "RelevanceFilter",
+    "RelevanceLevel",
+    "SmartDataFilter",
 ]
-

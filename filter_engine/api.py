@@ -10,9 +10,6 @@ from fastapi.responses import HTMLResponse, FileResponse
 from pydantic import BaseModel, Field
 
 from .rules import RuleManager, RuleCreate, RuleUpdate, Rule
-from .pipeline import FilterPipeline
-from .core.dynamic_pipeline import DynamicFilterPipeline, DynamicFilterConfig
-from .core.query_analyzer import QueryAnalyzer, FilterScenario, FilterSeverity
 from .core.relevance_filter import SmartDataFilter, RelevanceLevel
 from .llm.smart_matcher import SmartRuleMatcher, SmartMatchResult
 from .config import settings
@@ -121,25 +118,6 @@ except Exception:
 
 # 全局实例
 rule_manager = RuleManager(settings.DATABASE_PATH)
-pipeline = FilterPipeline(use_llm=False)
-
-# 动态过滤管道（懒加载）
-_dynamic_pipeline = None
-
-def get_dynamic_pipeline() -> DynamicFilterPipeline:
-    """获取动态过滤管道（懒加载）"""
-    global _dynamic_pipeline
-    if _dynamic_pipeline is None:
-        _dynamic_pipeline = DynamicFilterPipeline(
-            db_path=settings.DATABASE_PATH,
-            use_llm=True,
-            config=DynamicFilterConfig(
-                enable_dynamic_rules=True,
-                enable_rule_generation=True,
-                auto_save_generated_rules=False,
-            )
-        )
-    return _dynamic_pipeline
 
 
 # ==================== 规则管理API ====================
@@ -183,7 +161,6 @@ async def create_rule(data: RuleCreate):
     
     try:
         rule = rule_manager.create(data)
-        pipeline.reload_rules()
         return rule
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -195,7 +172,6 @@ async def update_rule(rule_id: int, data: RuleUpdate):
     rule = rule_manager.update(rule_id, data)
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
-    pipeline.reload_rules()
     return rule
 
 
@@ -204,7 +180,6 @@ async def delete_rule(rule_id: int):
     """删除规则"""
     if not rule_manager.delete(rule_id):
         raise HTTPException(status_code=404, detail="规则不存在")
-    pipeline.reload_rules()
     return {"message": "删除成功"}
 
 
@@ -214,7 +189,6 @@ async def toggle_rule(rule_id: int):
     rule = rule_manager.toggle(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
-    pipeline.reload_rules()
     return rule
 
 
@@ -231,7 +205,6 @@ async def rollback_rule(rule_id: int, version: int):
     rule = rule_manager.rollback(rule_id, version)
     if not rule:
         raise HTTPException(status_code=404, detail="规则或版本不存在")
-    pipeline.reload_rules()
     return rule
 
 
@@ -246,19 +219,18 @@ async def export_rules():
 async def import_rules(data: ImportRulesRequest):
     """批量导入规则"""
     result = rule_manager.import_rules(data.rules, overwrite=True)
-    pipeline.reload_rules()
     return {"message": "导入完成", **result}
 
 
 @app.post("/api/rules/test", tags=["规则管理"])
 async def test_rule(rule_id: int, text: str):
     """测试单条规则"""
-    from .rules import RuleCreate
+    from .core.rule_engine import RuleEngine
     rule = rule_manager.get(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="规则不存在")
-    
-    result = pipeline.rule_engine.test_rule(rule, text)
+    engine = RuleEngine(rule_manager)
+    result = engine.test_rule(rule, text)
     return {
         "is_matched": result.is_matched,
         "confidence": result.confidence,
@@ -266,65 +238,34 @@ async def test_rule(rule_id: int, text: str):
     }
 
 
-# ==================== 过滤API（遗留，待删除）====================
+# ==================== 过滤API（遗留，已移除）====================
 
 @app.post("/api/filter", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_text(request: FilterRequest):
-    """[DEPRECATED] 过滤单条文本 — 使用 FilterPipeline（旧方案），请改用 /api/filter/complete"""
-    result = pipeline.filter_text(request.text, use_llm=request.use_llm)
-    return result.model_dump()
+    """[REMOVED] 此接口依赖已删除的 FilterPipeline，请改用 /api/filter/complete"""
+    raise HTTPException(status_code=410, detail="此接口已移除，请使用 /api/filter/complete")
 
 
 @app.post("/api/filter/batch", tags=["⚠️ 遗留接口"], deprecated=True)
 async def filter_batch(request: BatchFilterRequest):
-    """[DEPRECATED] 批量过滤 — 使用 FilterPipeline（旧方案），请改用 /api/filter/auto"""
-    results = pipeline.filter_and_split(
-        request.items,
-        content_field=request.content_field,
-        use_llm=request.use_llm,
-    )
-    return results
+    """[REMOVED] 此接口依赖已删除的 FilterPipeline，请改用 /api/filter/auto"""
+    raise HTTPException(status_code=410, detail="此接口已移除，请使用 /api/filter/auto")
 
 
-# ==================== 动态过滤API（遗留，待删除）====================
+# ==================== 动态过滤API（遗留，已移除）====================
 
 @app.post("/api/filter/dynamic", tags=["⚠️ 遗留接口"], deprecated=True)
 async def dynamic_filter(request: DynamicFilterRequest):
     """
-    [DEPRECATED] 动态过滤 — 使用 DynamicFilterPipeline（第一代动态方案），请改用 /api/filter/auto
-
-    功能：
-    1. 分析用户查询意图（场景、严格程度）
-    2. 动态选择适用的规则集
-    3. 执行过滤
-    4. （可选）分析缺口并生成新规则
+    [REMOVED] 此接口依赖已删除的 DynamicFilterPipeline，请改用 /api/filter/auto
     """
-    try:
-        dp = get_dynamic_pipeline()
-        result = dp.filter_with_query(
-            query=request.query,
-            texts=request.texts,
-            context=request.context,
-            auto_generate_rules=request.auto_generate_rules,
-        )
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    raise HTTPException(status_code=410, detail="此接口已移除，请使用 /api/filter/auto")
 
 
 @app.post("/api/query/analyze", tags=["⚠️ 遗留接口"], deprecated=True)
 async def analyze_query(request: QueryAnalyzeRequest):
-    """
-    [DEPRECATED] 分析查询意图 — 基于关键词匹配的场景识别，精度低于 SmartRuleMatcher
-
-    返回：场景、严格程度、额外关注类别、自定义关键词
-    """
-    analyzer = QueryAnalyzer()
-    intent = analyzer.analyze(
-        query=request.query,
-        context=request.context,
-    )
-    return intent.to_dict()
+    """[REMOVED] 此接口依赖已删除的 QueryAnalyzer，请使用 SmartRuleMatcher"""
+    raise HTTPException(status_code=410, detail="此接口已移除")
 
 
 # ==================== 智能筛选API ====================
@@ -412,84 +353,26 @@ async def filter_by_relevance(request: RelevanceFilterRequest):
 
 @app.post("/api/rules/generate", tags=["⚠️ 遗留接口"], deprecated=True)
 async def generate_rules(request: RuleGenerateRequest):
-    """
-    [DEPRECATED] 根据样本文本生成过滤规则 — 依赖 DynamicFilterPipeline（遗留）
-    
-    使用LLM分析样本文本并生成适用的规则
-    """
-    try:
-        dp = get_dynamic_pipeline()
-        generated_rules = dp.generate_missing_rules(
-            query=request.query,
-            sample_texts=request.sample_texts,
-            category=request.category,
-        )
-        return {
-            "generated_rules": [r.to_dict() for r in generated_rules],
-            "count": len(generated_rules),
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """[REMOVED] 此接口依赖已删除的 DynamicFilterPipeline"""
+    raise HTTPException(status_code=410, detail="此接口已移除，规则请通过 /api/rules 手动管理")
 
 
 @app.post("/api/rules/generate/save", tags=["⚠️ 遗留接口"], deprecated=True)
 async def save_generated_rule(rule_data: dict):
-    """[DEPRECATED] 保存生成的规则 — 依赖 DynamicFilterPipeline（遗留）"""
-    try:
-        dp = get_dynamic_pipeline()
-        
-        # 从rule_data构建RuleCreate
-        from .rules import RuleCreate, RuleType, RuleCategory
-        
-        rule_info = rule_data.get("rule", rule_data)
-        rule_create = RuleCreate(
-            name=rule_info["name"],
-            type=RuleType(rule_info["type"]),
-            content=rule_info["content"],
-            category=RuleCategory(rule_info["category"]) if rule_info.get("category") else None,
-            priority=rule_info.get("priority", 50),
-            description=rule_info.get("description", "LLM自动生成"),
-            enabled=True,
-        )
-        
-        rule = rule_manager.create(rule_create)
-        pipeline.reload_rules()
-        dp.reload_rules()
-        
-        return {"message": "规则已保存", "rule_id": rule.id, "rule": rule.model_dump()}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    """[REMOVED] 此接口依赖已删除的 DynamicFilterPipeline"""
+    raise HTTPException(status_code=410, detail="此接口已移除，规则请通过 /api/rules 手动管理")
 
 
 @app.get("/api/scenarios", tags=["⚠️ 遗留接口"], deprecated=True)
 async def list_scenarios():
-    """[DEPRECATED] 获取支持的过滤场景列表 — 静态枚举，场景已由 SmartRuleMatcher 动态管理"""
-    return {
-        "scenarios": [
-            {"value": "normal", "label": "通用场景", "description": "默认过滤规则"},
-            {"value": "ecommerce", "label": "电商场景", "description": "商品评论、好评返现等"},
-            {"value": "news", "label": "新闻资讯", "description": "新闻内容、政治敏感等"},
-            {"value": "social", "label": "社交内容", "description": "评论、私信、引流等"},
-            {"value": "finance", "label": "金融财经", "description": "投资、理财、股票等"},
-            {"value": "medical", "label": "医疗健康", "description": "医药、健康、保健品等"},
-            {"value": "education", "label": "教育培训", "description": "课程、培训、考试等"},
-        ],
-        "severities": [
-            {"value": "relaxed", "label": "宽松", "description": "仅过滤明显违规内容"},
-            {"value": "normal", "label": "正常", "description": "标准过滤"},
-            {"value": "strict", "label": "严格", "description": "严格过滤所有可疑内容"},
-        ],
-    }
+    """[REMOVED] 静态场景枚举，场景已由 SmartRuleMatcher 动态管理"""
+    raise HTTPException(status_code=410, detail="此接口已移除")
 
 
-@app.get("/api/dynamic/stats", tags=["动态过滤"])
+@app.get("/api/dynamic/stats", tags=["⚠️ 遗留接口"], deprecated=True)
 async def get_dynamic_stats():
-    """获取动态过滤统计"""
-    try:
-        dp = get_dynamic_pipeline()
-        return dp.get_stats()
-    except Exception as e:
-        return {"error": str(e)}
+    """[REMOVED] 此接口依赖已删除的 DynamicFilterPipeline"""
+    raise HTTPException(status_code=410, detail="此接口已移除")
 
 
 # ==================== 智能规则匹配API ====================
@@ -639,9 +522,6 @@ async def save_suggested_rules(request: SaveSuggestedRulesRequest):
         
         saved_ids = matcher.save_suggested_rules(suggest_rules)
         
-        # 重载规则
-        pipeline.reload_rules()
-        
         return {
             "message": f"成功保存 {len(saved_ids)} 条规则",
             "saved_rule_ids": saved_ids,
@@ -673,11 +553,13 @@ async def batch_test(request: BatchTestRequest):
     直接复用 RuleEngine（支持关键词/正则/pattern 三种类型，AC自动机加速）。
     general_only=True 时，只采纳名称以"通用-"开头的命中规则。
     """
+    from .core.rule_engine import RuleEngine as _RuleEngine
+    _rule_engine = _RuleEngine(rule_manager)
     results = []
 
     for content in request.contents:
-        # 复用全局 RuleEngine，支持 keyword / regex / pattern 三种类型
-        engine_result = pipeline.rule_engine.filter(content)
+        # 复用 RuleEngine，支持 keyword / regex / pattern 三种类型，AC自动机加速
+        engine_result = _rule_engine.filter(content)
 
         matched = False
         matched_rule_name = None
@@ -976,6 +858,8 @@ async def three_layer_filter(request: ThreeLayerFilterRequest):
             t0 = time.time()
             print(f"🔍 Layer-1: 基础规则过滤 ({len(items)} 条)")
             
+            from .core.rule_engine import RuleEngine as _RuleEngine
+            _rule_engine = _RuleEngine(rule_manager)
             for item in items:
                 content = item["content"]
                 
@@ -986,7 +870,7 @@ async def three_layer_filter(request: ThreeLayerFilterRequest):
                     continue
                 
                 # 规则引擎过滤（只用通用规则）
-                result = pipeline.rule_engine.filter(content)
+                result = _rule_engine.filter(content)
                 
                 # 检查是否命中通用规则（涉黄涉政涉暴等）
                 if result.is_matched:
@@ -1684,8 +1568,10 @@ async def run_pipeline(request: PipelineRequest):
         survivors_after_l1 = []
 
         if request.enable_base_filter:
+            from .core.rule_engine import RuleEngine as _RuleEngine
+            _rule_engine = _RuleEngine(rule_manager)
             for content in request.contents:
-                engine_result = pipeline.rule_engine.filter(content)
+                engine_result = _rule_engine.filter(content)
                 filtered = False
                 hit_rule = None
                 if engine_result.is_matched:
@@ -1865,21 +1751,19 @@ async def run_pipeline(request: PipelineRequest):
 @app.get("/api/stats", tags=["系统"])
 async def get_system_stats():
     """获取系统统计"""
-    return pipeline.get_stats()
+    return rule_manager.stats()
 
 
 @app.post("/api/cache/clear", tags=["系统"])
 async def clear_cache():
-    """清空缓存"""
-    pipeline.clear_cache()
-    return {"message": "缓存已清空"}
+    """清空缓存（旧管道缓存已移除，此接口为空操作）"""
+    return {"message": "无缓存需清空"}
 
 
 @app.post("/api/rules/reload", tags=["系统"])
-async def reload_rules():
-    """重新加载规则"""
-    pipeline.reload_rules()
-    return {"message": "规则已重新加载"}
+async def reload_rules_endpoint():
+    """重新加载规则（SmartRuleMatcher 每次调用自动加载，此接口为空操作）"""
+    return {"message": "规则无需手动重载，SmartRuleMatcher 每次请求自动读取最新规则"}
 
 
 # ==================== 前端页面 ====================
