@@ -1,0 +1,63 @@
+{
+  "name": "Joke Generator Workflow",
+  "description": "A simple workflow that generates a joke and formats it.",
+  "nodes": [
+    {
+      "id": "start_node",
+      "type": "Start",
+      "config": {
+        "title": "Start",
+        "params": {}
+      }
+    },
+    {
+      "id": "joke_generator",
+      "type": "LLM",
+      "config": {
+        "title": "Generate Joke",
+        "params": {
+          "model": "deepseek-chat",
+          "prompt": "Tell me a short joke about {{topic}}."
+        }
+      }
+    },
+    {
+      "id": "formatter",
+      "type": "Code",
+      "config": {
+        "title": "Format Text",
+        "params": {
+          "inputs": {
+            "text": "$joke_generator.content"
+          },
+          "code": "def main():\n    return text.upper()"
+        }
+      }
+    },
+    {
+      "id": "end_node",
+      "type": "End",
+      "config": {
+        "title": "End",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start_node",
+      "target": "joke_generator"
+    },
+    {
+      "source": "joke_generator",
+      "target": "formatter"
+    },
+    {
+      "source": "formatter",
+      "target": "end_node"
+    }
+  ],
+  "variables": {
+    "topic": "Python programming"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "name": "情感分析V2测试工作流",
+  "description": "测试情感分析智能体V2的ReAct推理和工具调用能力",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "config": {
+        "title": "开始",
+        "description": "工作流入口",
+        "params": {}
+      }
+    },
+    {
+      "id": "data_collector",
+      "type": "DataCollectionAgent",
+      "config": {
+        "title": "数据收集",
+        "description": "收集测试数据",
+        "agent_role": "数据收集专家",
+        "agent_goal": "收集相关数据",
+        "params": {
+          "topic": "AI产品评测",
+          "sources": ["internet"],
+          "max_results": 10
+        }
+      }
+    },
+    {
+      "id": "sentiment_analyzer_v2",
+      "type": "SentimentAgent",
+      "config": {
+        "title": "情感分析V2",
+        "description": "使用V2 Agent进行情感分析",
+        "agent_role": "情感分析专家",
+        "agent_goal": "使用ReAct推理进行深度情感分析",
+        "params": {
+          "data": "$data_collector",
+          "use_v2_agent": true,
+          "task_description": "对这些数据进行全面的情感分析，识别主要情感倾向和关键洞察",
+          "topic": "AI产品评价",
+          "extract_insights": true
+        }
+      }
+    },
+    {
+      "id": "report_generator",
+      "type": "ReportAgent",
+      "config": {
+        "title": "报告生成",
+        "description": "生成分析报告",
+        "agent_role": "报告生成专家",
+        "agent_goal": "生成综合报告",
+        "params": {
+          "report_type": "sentiment_analysis",
+          "template": "default",
+          "data_sources": ["$data_collector", "$sentiment_analyzer_v2"],
+          "format": "markdown"
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "config": {
+        "title": "结束",
+        "description": "工作流出口",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "data_collector"
+    },
+    {
+      "source": "data_collector",
+      "target": "sentiment_analyzer_v2"
+    },
+    {
+      "source": "sentiment_analyzer_v2",
+      "target": "report_generator"
+    },
+    {
+      "source": "report_generator",
+      "target": "end"
+    }
+  ]
+}

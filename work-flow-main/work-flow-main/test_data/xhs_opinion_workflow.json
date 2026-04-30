@@ -1,0 +1,74 @@
+{
+  "name": "XHS舆情分析工作流（含三层数据过滤）",
+  "description": "从小红薯数据库读取帖子 → 三层智能过滤（规则+LLM）→ 情感分析 → 生成报告",
+  "variables": {
+    "topic": "丽江旅游攻略"
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "config": {
+        "title": "开始",
+        "params": {}
+      }
+    },
+    {
+      "id": "xhs_filter",
+      "type": "XHSFilterAgent",
+      "config": {
+        "title": "XHS三层数据过滤",
+        "description": "调用数据过滤引擎：L1读取DB → L2规则过滤 → L3 LLM相关性过滤",
+        "params": {
+          "query": "$topic",
+          "platform": "xhs",
+          "max_posts": 500,
+          "min_relevance": 0.6,
+          "include_comments": true,
+          "filter_api_base": "http://localhost:8081"
+        }
+      }
+    },
+    {
+      "id": "sentiment",
+      "type": "SentimentAgent",
+      "config": {
+        "title": "情感分析",
+        "description": "对过滤后的高质量帖子进行情感分析",
+        "params": {
+          "data": "$xhs_filter.collected_data",
+          "analysis_depth": "detailed",
+          "categories": ["正面", "负面", "中性"]
+        }
+      }
+    },
+    {
+      "id": "report",
+      "type": "ReportAgent",
+      "config": {
+        "title": "生成报告",
+        "description": "汇总分析结果，生成舆情报告",
+        "params": {
+          "sentiment_data": "$sentiment",
+          "filter_stats": "$xhs_filter.filter_stats",
+          "query": "$xhs_filter.query",
+          "report_format": "markdown"
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "config": {
+        "title": "结束",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    { "source": "start",      "target": "xhs_filter" },
+    { "source": "xhs_filter", "target": "sentiment" },
+    { "source": "sentiment",  "target": "report" },
+    { "source": "report",     "target": "end" }
+  ]
+}

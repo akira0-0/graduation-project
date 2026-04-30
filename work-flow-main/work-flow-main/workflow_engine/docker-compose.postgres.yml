@@ -1,0 +1,80 @@
+# PostgreSQL Docker Compose 配置
+# 用于快速启动开发环境的 PostgreSQL 数据库
+# 
+# 使用方法:
+# 1. 启动服务: docker-compose -f docker-compose.postgres.yml up -d
+# 2. 停止服务: docker-compose -f docker-compose.postgres.yml down
+# 3. 查看日志: docker-compose -f docker-compose.postgres.yml logs -f
+# 4. 重启服务: docker-compose -f docker-compose.postgres.yml restart
+# 5. 清理数据: docker-compose -f docker-compose.postgres.yml down -v
+
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: workflow_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-workflow_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workflow_password}
+      POSTGRES_DB: ${POSTGRES_DB:-workflow_db}
+      # 性能优化配置
+      POSTGRES_INITDB_ARGS: "-E UTF8 --locale=en_US.UTF-8"
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      # 数据持久化
+      - postgres_data:/var/lib/postgresql/data
+      # 初始化脚本（可选）
+      - ./docker/init-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workflow_user} -d ${POSTGRES_DB:-workflow_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - workflow_network
+    # 资源限制（可选）
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 2G
+        reservations:
+          cpus: '0.5'
+          memory: 512M
+
+  # 可选：pgAdmin Web 管理界面
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: workflow_pgadmin
+    restart: unless-stopped
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@workflow.local}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin123}
+      PGADMIN_LISTEN_PORT: 5050
+      # 服务器配置
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+      PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED: 'False'
+    ports:
+      - "${PGADMIN_PORT:-5050}:5050"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - postgres
+    networks:
+      - workflow_network
+    profiles:
+      - admin  # 使用 --profile admin 启用此服务
+
+volumes:
+  postgres_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  workflow_network:
+    driver: bridge

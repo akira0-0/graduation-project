@@ -383,11 +383,48 @@ class SmartRuleMatcher:
             response = await self.llm_client.chat(messages=messages, temperature=0.3, max_tokens=3000)
             raw_response = response.content
             data = self._parse_llm_response(raw_response)
-            return self._build_result(query, scenario, data, raw_response)
+            result = self._build_result(query, scenario, data, raw_response)
+            # 代码层兜底：若 LLM 未生成任何 select 规则，自动注入主题锚定规则
+            result = self._ensure_anchor_select_rule(query, result)
+            return result
         except json.JSONDecodeError as e:
             return self._error_result(query, f"JSON解析失败: {e}", raw_response)
         except Exception as e:
             return self._error_result(query, f"匹配失败: {e}", raw_response)
+
+    def _ensure_anchor_select_rule(self, query: str, result: SmartMatchResult) -> SmartMatchResult:
+        """
+        兜底：检查是否存在 select 规则（matched_rules 或 gap_rules 中任意一个）。
+        若完全没有，从 query 中提取核心词自动注入一条 select GapRule。
+        """
+        has_select = (
+            any(r.purpose == "select" for r in result.matched_rules)
+            or any(r.purpose == "select" for r in result.gap_rules)
+        )
+        if has_select:
+            return result  # LLM 已经生成了，不需要兜底
+
+        # 从 query 提取关键词：按空格拆分，保留长度 >= 2 的词
+        parts = [w.strip() for w in query.split() if len(w.strip()) >= 2]
+        if not parts:
+            # 无法拆分则用整个 query
+            parts = [query.strip()] if len(query.strip()) >= 2 else []
+        if not parts:
+            return result  # query 太短，跳过
+
+        anchor_rule = GapRule(
+            name=f"主题锚定-{parts[0]}",
+            type="keyword",
+            content=parts,
+            category="other",
+            purpose="select",
+            description=f"[代码层兜底] 从 query 自动提取主题关键词，仅保留包含相关词的内容",
+            needs_llm_semantic=False,
+        )
+        # 插到 gap_rules 最前面，确保优先级最高
+        result.gap_rules.insert(0, anchor_rule)
+        print(f"  ⚠️  [SmartMatcher] LLM 未生成 select 规则，已自动注入主题锚定规则: {parts}")
+        return result
 
     def match_sync(self, query: str, force_scenario: Optional[str] = None) -> SmartMatchResult:
         """同步智能匹配"""

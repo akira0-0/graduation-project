@@ -1,0 +1,19 @@
+{
+  "id": 54324,
+  "name": "WorkFlow",
+  "abbrName": "WO",
+  "description": "",
+  "devMode": 2,
+  "status": null,
+  "url": null,
+  "databaseHost": null,
+  "databasePort": null,
+  "databaseName": null,
+  "databaseUsername": null,
+  "databasePassword": null,
+  "projectInfo": [
+    {
+      "路贾宋较": 54324
+    }
+  ]
+}

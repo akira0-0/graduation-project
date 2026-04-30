@@ -56,7 +56,7 @@ uv add pyahocorasick httpx pydantic-settings
 
 ```bash
 # 开发模式（热重载）
-uv run uvicorn filter_engine.api:app --host 127.0.0.1 --port 8081 --reload
+uv run python -m uvicorn filter_engine.api:app --host 0.0.0.0 --port 8081 --reload
 
 # 生产模式
 uv run python -m filter_engine.main

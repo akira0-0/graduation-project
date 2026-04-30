@@ -1,0 +1,16 @@
+{
+  "name": "workflow-playwright-tests",
+  "version": "1.0.0",
+  "description": "工作流引擎的Playwright端到端测试",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}

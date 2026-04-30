@@ -1,0 +1,99 @@
+{
+  "name": "Sentiment Analysis Workflow",
+  "description": "A workflow to collect, analyze, and report on public sentiment about a specific topic.",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "config": {
+        "title": "Start Node",
+        "params": {}
+      }
+    },
+    {
+      "id": "collect_node",
+      "type": "Code",
+      "config": {
+        "title": "Data Collection",
+        "params": {
+          "code": "mock_collect_data(topic='{{topic}}')"
+        },
+        "agent_role": "Data Collector",
+        "agent_goal": "Collect comprehensive data from various sources.",
+        "agent_backstory": "You are an expert at gathering information from the internet."
+      }
+    },
+    {
+      "id": "filter_node",
+      "type": "Code",
+      "config": {
+        "title": "Data Filtering",
+        "params": {
+          "code": "mock_filter_data(data={{collect_node.output}})"
+        },
+        "agent_role": "Data Analyst",
+        "agent_goal": "Filter out irrelevant noise from data.",
+        "agent_backstory": "You have a sharp eye for relevant information."
+      }
+    },
+    {
+      "id": "analyze_node",
+      "type": "Code",
+      "config": {
+        "title": "Sentiment Analysis",
+        "params": {
+          "code": "mock_sentiment_analysis(data={{filter_node.output}})"
+        },
+        "agent_role": "Sentiment Analyst",
+        "agent_goal": "Accurately determine the sentiment of text.",
+        "agent_backstory": "You are a psychologist specializing in crowd sentiment."
+      }
+    },
+    {
+      "id": "report_node",
+      "type": "Code",
+      "config": {
+        "title": "Report Compilation",
+        "params": {
+          "code": "mock_compile_report(analyzed_data={{analyze_node.output}})"
+        },
+        "agent_role": "Report Writer",
+        "agent_goal": "Create clear and concise reports.",
+        "agent_backstory": "You are a professional technical writer."
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "config": {
+        "title": "End Node",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "collect_node"
+    },
+    {
+      "source": "collect_node",
+      "target": "filter_node"
+    },
+    {
+      "source": "filter_node",
+      "target": "analyze_node"
+    },
+    {
+      "source": "analyze_node",
+      "target": "report_node"
+    },
+    {
+      "source": "report_node",
+      "target": "end"
+    }
+  ],
+  "variables": {
+    "topic": "SpaceX"
+  }
+}

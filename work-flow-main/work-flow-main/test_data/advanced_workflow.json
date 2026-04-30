@@ -1,0 +1,202 @@
+{
+  "name": "高级工作流示例",
+  "description": "演示条件分支和循环功能的工作流",
+  "variables": {
+    "threshold": 5
+  },
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "config": {
+        "title": "开始",
+        "params": {}
+      }
+    },
+    {
+      "id": "data_collector",
+      "type": "Code",
+      "config": {
+        "title": "收集数据",
+        "agent_role": "数据收集员",
+        "agent_goal": "收集测试数据",
+        "agent_backstory": "我负责收集数据用于测试",
+        "params": {
+          "code": "def main():\n    return {\n        \"data\": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],\n        \"count\": 10\n    }",
+          "inputs": {}
+        }
+      }
+    },
+    {
+      "id": "count_checker",
+      "type": "Code",
+      "config": {
+        "title": "计数检查",
+        "agent_role": "数据分析师",
+        "agent_goal": "分析数据计数",
+        "agent_backstory": "我分析数据的数量",
+        "params": {
+          "code": "def main():\n    collected = data_collector_result['count']\n    return {\n        \"count\": collected,\n        \"above_threshold\": collected > 5\n    }",
+          "inputs": {
+            "data_collector_result": "$data_collector.result"
+          }
+        }
+      }
+    },
+    {
+      "id": "condition_node",
+      "type": "Condition",
+      "config": {
+        "title": "条件判断",
+        "agent_role": "决策员",
+        "agent_goal": "根据条件决定执行路径",
+        "agent_backstory": "我负责决策工作流的执行方向",
+        "params": {
+          "condition": "$count_checker.result.above_threshold",
+          "condition_type": "simple"
+        }
+      }
+    },
+    {
+      "id": "process_large",
+      "type": "LLM",
+      "config": {
+        "title": "处理大数据",
+        "agent_role": "高级分析师",
+        "agent_goal": "分析和处理大量数据",
+        "agent_backstory": "我是专业的数据分析师，擅长处理大数据集",
+        "params": {
+          "model": "deepseek-chat",
+          "prompt": "数据量是 {{count}}，超过了阈值 {{threshold}}。请提供一些建议。",
+          "inputs": {
+            "count": "$count_checker.result.count",
+            "threshold": "$context.threshold"
+          }
+        }
+      }
+    },
+    {
+      "id": "process_small",
+      "type": "LLM",
+      "config": {
+        "title": "处理小数据",
+        "agent_role": "初级分析师",
+        "agent_goal": "分析和处理少量数据",
+        "agent_backstory": "我是初级数据分析师，专注于小规模数据分析",
+        "params": {
+          "model": "deepseek-chat",
+          "prompt": "数据量是 {{count}}，未超过阈值 {{threshold}}。请提供一些建议。",
+          "inputs": {
+            "count": "$count_checker.result.count",
+            "threshold": "$context.threshold"
+          }
+        }
+      }
+    },
+    {
+      "id": "loop_node",
+      "type": "Loop",
+      "config": {
+        "title": "循环处理",
+        "agent_role": "迭代处理器",
+        "agent_goal": "多次迭代处理数据",
+        "agent_backstory": "我负责循环处理数据，每次迭代都产生输出",
+        "params": {
+          "loop_type": "count",
+          "max_iterations": 3
+        }
+      }
+    },
+    {
+      "id": "iteration_processor",
+      "type": "Code",
+      "config": {
+        "title": "迭代处理",
+        "agent_role": "迭代执行器",
+        "agent_goal": "执行每次迭代的处理逻辑",
+        "agent_backstory": "我执行循环中的每次迭代",
+        "params": {
+          "code": "def main():\n    iteration = loop_node_result['current_count']\n    return {\n        \"iteration\": iteration,\n        \"message\": f\"这是第 {iteration + 1} 次迭代\",\n        \"data\": f\"迭代数据_{iteration}\"\n    }",
+          "inputs": {
+            "loop_node_result": "$loop_node.result"
+          }
+        }
+      }
+    },
+    {
+      "id": "summary_generator",
+      "type": "Code",
+      "config": {
+        "title": "生成摘要",
+        "agent_role": "摘要生成器",
+        "agent_goal": "生成执行摘要",
+        "agent_backstory": "我负责生成工作流执行的摘要报告",
+        "params": {
+          "code": "def main():\n    loop_outputs = loop_node_result.get('total_outputs', [])\n    # 确定走了哪个分支\n    branch = 'large' if process_large_result else 'small'\n    \n    return {\n        \"total_iterations\": len(loop_outputs),\n        \"branch_taken\": branch,\n        \"summary\": f\"工作流执行了 {len(loop_outputs)} 次迭代，走了 {branch} 分支\"\n    }",
+          "inputs": {
+            "loop_node_result": "$loop_node.result",
+            "process_large_result": "$process_large.result.content",
+            "process_small_result": "$process_small.result.content"
+          }
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "config": {
+        "title": "结束",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "data_collector"
+    },
+    {
+      "source": "data_collector",
+      "target": "count_checker"
+    },
+    {
+      "source": "count_checker",
+      "target": "condition_node"
+    },
+    {
+      "source": "condition_node",
+      "target": "process_large",
+      "condition": "true"
+    },
+    {
+      "source": "condition_node",
+      "target": "process_small",
+      "condition": "false"
+    },
+    {
+      "source": "process_large",
+      "target": "loop_node"
+    },
+    {
+      "source": "process_small",
+      "target": "loop_node"
+    },
+    {
+      "source": "loop_node",
+      "target": "iteration_processor"
+    },
+    {
+      "source": "iteration_processor",
+      "target": "loop_node",
+      "condition": "continue"
+    },
+    {
+      "source": "loop_node",
+      "target": "summary_generator"
+    },
+    {
+      "source": "summary_generator",
+      "target": "end"
+    }
+  ]
+}

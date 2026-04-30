@@ -1,0 +1,109 @@
+{
+  "name": "舆论分析工作流",
+  "description": "完整的舆论分析流程：数据收集 -> 信息过滤 -> 情感分析 -> 报告生成",
+  "nodes": [
+    {
+      "id": "start",
+      "type": "Start",
+      "config": {
+        "title": "开始",
+        "description": "工作流入口",
+        "params": {}
+      }
+    },
+    {
+      "id": "data_collector",
+      "type": "DataCollectionAgent",
+      "config": {
+        "title": "数据收集",
+        "description": "从互联网收集相关信息",
+        "agent_role": "数据收集专家",
+        "agent_goal": "从多个数据源收集相关信息",
+        "params": {
+          "topic": "DeepSeek用户评价",
+          "sources": ["internet"],
+          "max_results": 20,
+          "time_range": "month"
+        }
+      }
+    },
+    {
+      "id": "data_filter",
+      "type": "FilterAgent",
+      "config": {
+        "title": "信息过滤",
+        "description": "调用数据过滤引擎API进行三层智能过滤",
+        "params": {
+          "query": "$topic",
+          "platform": "xhs",
+          "max_posts": 500,
+          "limit": 15,
+          "filter_api_base": "http://localhost:8081"
+        }
+      }
+    },
+    {
+      "id": "sentiment_analyzer",
+      "type": "SentimentAgent",
+      "config": {
+        "title": "情感分析",
+        "description": "分析文本的情感倾向",
+        "agent_role": "情感分析专家",
+        "agent_goal": "分析文本的情感倾向和情绪",
+        "params": {
+          "data": "$data_filter",
+          "analysis_type": "sentiment",
+          "language": "zh",
+          "detail_level": "detailed"
+        }
+      }
+    },
+    {
+      "id": "report_generator",
+      "type": "ReportAgent",
+      "config": {
+        "title": "报告生成",
+        "description": "生成综合分析报告",
+        "agent_role": "报告生成专家",
+        "agent_goal": "生成全面且有洞察力的分析报告",
+        "params": {
+          "report_type": "sentiment_analysis",
+          "template": "default",
+          "data_sources": ["$data_collector", "$data_filter", "$sentiment_analyzer"],
+          "format": "markdown"
+        }
+      }
+    },
+    {
+      "id": "end",
+      "type": "End",
+      "config": {
+        "title": "结束",
+        "description": "工作流出口",
+        "params": {}
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "start",
+      "target": "data_collector"
+    },
+    {
+      "source": "data_collector",
+      "target": "data_filter"
+    },
+    {
+      "source": "data_filter",
+      "target": "sentiment_analyzer"
+    },
+    {
+      "source": "sentiment_analyzer",
+      "target": "report_generator"
+    },
+    {
+      "source": "report_generator",
+      "target": "end"
+    }
+  ]
+}
