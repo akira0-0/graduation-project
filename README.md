@@ -4,6 +4,30 @@
 
 ---
 
+## 🚀 启动服务
+
+### 后端（过滤引擎 API）
+
+```cmd
+cd e:\MEDIA_ANALYSIS_SYSTEM\xhs-crawler
+uv run python -m filter_engine.api
+```
+
+> 启动后访问 `http://localhost:8081`，Swagger 文档：`http://localhost:8081/docs`
+
+### 前端（可视化管理界面）
+
+```cmd
+cd e:\MEDIA_ANALYSIS_SYSTEM\xhs-crawler\filter_engine\web\app
+npm run dev
+```
+
+> 启动后访问 `http://localhost:5173`（若端口占用自动顺延至 5174 等）
+
+> ⚠️ 前端需要后端同时运行，否则所有 API 请求会报 `ECONNREFUSED`
+
+---
+
 ## 快速开始
 
 ### 环境要求
